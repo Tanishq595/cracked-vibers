@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Mic, MicOff } from "lucide-react";
+import { useAuth } from "@clerk/clerk-react";
+import { Mic, MicOff, StickyNote, Plus } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { cn } from "../ui/utils";
@@ -41,15 +42,34 @@ export function SpeakingCoach({
   >([]);
   const [sessionSummary, setSessionSummary] = useState<string | null>(null);
   const [micOn, setMicOn] = useState(true);
+  const [coachAudioPlaying, setCoachAudioPlaying] = useState(false);
+  const [notes, setNotes] = useState<{ id: string; content: string; source: string | null; created_at: string }[]>([]);
+  const [selectedTextForNote, setSelectedTextForNote] = useState<string | null>(null);
+  const [savingNote, setSavingNote] = useState(false);
+  const [noteError, setNoteError] = useState<string | null>(null);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const transcriptRef = useRef<HTMLDivElement>(null);
+  const selectedTextRef = useRef<string | null>(null);
+  const { getToken } = useAuth();
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
   const recognitionRef = useRef<{ start(): void; stop(): void } | null>(null);
   const userTranscriptRef = useRef("");
   const conversationTurnsRef = useRef<{ role: "user" | "coach"; text: string }[]>([]);
+  const sessionStartRef = useRef<Date | null>(null);
+  const lastRequestedTextRef = useRef<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const conversationActiveRef = useRef(false);
+  const micOnRef = useRef(true);
 
   useEffect(() => {
     userTranscriptRef.current = userTranscript;
   }, [userTranscript]);
+  useEffect(() => {
+    conversationActiveRef.current = conversationActive;
+  }, [conversationActive]);
+  useEffect(() => {
+    micOnRef.current = micOn;
+  }, [micOn]);
   useEffect(() => {
     conversationTurnsRef.current = conversationTurns;
   }, [conversationTurns]);
@@ -79,6 +99,9 @@ export function SpeakingCoach({
             debateMotion: coachContext?.debateMotion,
             debateSide: coachContext?.debateSide,
           }),
+          ...(coachMode === "exam" && {
+            examType: coachContext?.examType && coachContext.examType !== "" ? coachContext.examType : null,
+          }),
         }),
       });
       const data = (await res.json()) as { message?: string };
@@ -86,7 +109,7 @@ export function SpeakingCoach({
     } catch {
       return undefined;
     }
-  }, [coachContext?.topics, coachContext?.knowledgeGaps, coachContext?.studyPlan, coachMode]);
+  }, [coachContext?.topics, coachContext?.knowledgeGaps, coachContext?.studyPlan, coachContext?.examType, coachMode]);
 
   // Play coach message with ElevenLabs TTS when API is configured
   // and sync the bot video with the spoken audio.
@@ -103,12 +126,24 @@ export function SpeakingCoach({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: text.trim() }),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        setCoachAudioPlaying(false);
+        return;
+      }
       const data = (await res.json()) as { audioBase64?: string; contentType?: string };
-      if (!data.audioBase64) return;
+      if (!data.audioBase64) {
+        setCoachAudioPlaying(false);
+        return;
+      }
       const contentType = data.contentType || "audio/mpeg";
       const audio = new Audio(`data:${contentType};base64,${data.audioBase64}`);
       ttsAudioRef.current = audio;
+
+      // Disable mic while coach is speaking (avoid picking up TTS and talking over)
+      setCoachAudioPlaying(true);
+      try {
+        recognitionRef.current?.stop();
+      } catch {}
 
       // Start bot video when the coach starts speaking
       const video = videoRef.current;
@@ -130,8 +165,18 @@ export function SpeakingCoach({
           v.pause();
           v.currentTime = 0;
         }
+        setCoachAudioPlaying(false);
+        // Re-enable mic when coach finishes speaking (if session still active and mic was on)
+        if (conversationActiveRef.current && micOnRef.current) {
+          try {
+            recognitionRef.current?.start();
+          } catch (e) {
+            console.warn("Speech recognition start after coach finished failed", e);
+          }
+        }
       };
     } catch {
+      setCoachAudioPlaying(false);
       // TTS optional; ignore errors
     }
   }, []);
@@ -185,11 +230,107 @@ export function SpeakingCoach({
     };
   }, []);
 
+  const fetchNotes = useCallback(async () => {
+    if (!getToken) {
+      console.log("[notes] fetchNotes skip: no getToken");
+      return;
+    }
+    const token = await getToken();
+    if (!token) {
+      console.log("[notes] fetchNotes skip: no token");
+      return;
+    }
+    try {
+      console.log("[notes] fetchNotes GET /api/speaking-coach-notes");
+      const res = await fetch("/api/speaking-coach-notes", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = (await res.json()) as { notes?: { id: string; content: string; source: string | null; created_at: string }[] };
+      if (res.ok) {
+        const list = data.notes ?? [];
+        console.log("[notes] fetchNotes ok count=" + list.length);
+        setNotes(list);
+      } else {
+        console.log("[notes] fetchNotes res not ok", res.status, data);
+      }
+    } catch (err) {
+      console.log("[notes] fetchNotes error", err);
+    }
+  }, [getToken]);
+
+  useEffect(() => {
+    fetchNotes();
+  }, [fetchNotes]);
+
+  const handleTranscriptMouseUp = useCallback(() => {
+    const sel = window.getSelection();
+    const text = sel?.toString().trim();
+    if (text) {
+      console.log("[notes] selection", text.length, "chars:", text.slice(0, 50) + (text.length > 50 ? "…" : ""));
+      selectedTextRef.current = text;
+      setSelectedTextForNote(text);
+    } else {
+      selectedTextRef.current = null;
+      setSelectedTextForNote(null);
+    }
+  }, []);
+
+  const handleAddToNotes = useCallback(async () => {
+    const text = selectedTextRef.current || selectedTextForNote;
+    console.log("[notes] handleAddToNotes text=" + (text ? text.length + " chars" : "empty"));
+    if (!text?.trim()) {
+      console.log("[notes] handleAddToNotes skip: no text");
+      return;
+    }
+    if (!getToken) {
+      console.log("[notes] handleAddToNotes skip: no getToken");
+      setNoteError("Sign in to save notes.");
+      return;
+    }
+    setNoteError(null);
+    setSavingNote(true);
+    try {
+      const token = await getToken();
+      if (!token) {
+        console.log("[notes] handleAddToNotes skip: no token");
+        setNoteError("Sign in to save notes.");
+        return;
+      }
+      console.log("[notes] POST /api/speaking-coach-notes", { contentLength: text.trim().length });
+      const res = await fetch("/api/speaking-coach-notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ content: text.trim(), source: "coach" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      console.log("[notes] POST response", res.status, data);
+      if (res.ok && data.note) {
+        setNotes((prev) => [data.note, ...prev]);
+        setSelectedTextForNote(null);
+        selectedTextRef.current = null;
+        window.getSelection()?.removeAllRanges();
+        console.log("[notes] note saved id=" + (data.note?.id ?? ""));
+      } else {
+        const errMsg = (data as { error?: string }).error ?? "Couldn't save note";
+        console.log("[notes] save failed", errMsg);
+        setNoteError(errMsg);
+      }
+    } catch (err) {
+      console.log("[notes] handleAddToNotes error", err);
+      setNoteError("Couldn't save note");
+    } finally {
+      setSavingNote(false);
+    }
+  }, [selectedTextForNote, getToken]);
+
   const conversation = useConversation({
     coachContext,
     coachMode,
     getCoachMessage,
     onConnect: () => {
+      sessionStartRef.current = new Date();
+      lastRequestedTextRef.current = null;
       setError(null);
       setSessionSummary(null);
       setIsStarting(false);
@@ -249,7 +390,10 @@ export function SpeakingCoach({
       return;
     }
     const t = setTimeout(() => {
-      if (!userTranscriptRef.current.trim()) return;
+      const latest = userTranscriptRef.current.trim();
+      if (!latest) return;
+      if (latest === lastRequestedTextRef.current) return;
+      lastRequestedTextRef.current = latest;
       conversation.requestCoachReply();
     }, 2000);
     return () => clearTimeout(t);
@@ -297,44 +441,105 @@ export function SpeakingCoach({
 
   const topicLabels = coachContext?.topics?.map((t) => t.label) ?? [];
 
-  const stopConversation = useCallback(async () => {
-    if (isStopping) return;
-    setIsStopping(true);
-    setError(null);
+  const stopConversation = useCallback(
+    async () => {
+      if (isStopping) return;
+      setIsStopping(true);
+      setError(null);
 
-    try {
-      await conversation.endSession();
-      setConversationActive(false);
+      // Capture session data before ending (for backend save)
+      const turnsToSave = conversationTurnsRef.current;
+      const startedAt = sessionStartRef.current ?? new Date();
+      const endedAt = new Date();
+      const totalDurationSec = Math.max(
+        0,
+        Math.round((endedAt.getTime() - startedAt.getTime()) / 1000),
+      );
 
-      // Stop and reset bot video when ending practice
-      if (videoRef.current) {
-        videoRef.current.pause();
-        videoRef.current.currentTime = 0;
-      }
+      try {
+        await conversation.endSession();
+        setConversationActive(false);
 
-      if (topicLabels.length > 0) {
-        if (userId) {
+        // Save session + transcript to Supabase when we have turns and userId
+        let assessmentSummary: string | null = null;
+        if (turnsToSave.length > 0 && userId) {
           try {
-            await fetch("/api/oral-session", {
+            const res = await fetch("/api/speaking-session-complete", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ userId, topics: topicLabels }),
+              body: JSON.stringify({
+                userId,
+                topic: topicLabels[0] ?? null,
+                topics: topicLabels,
+                coachMode,
+                startedAt: startedAt.toISOString(),
+                endedAt: endedAt.toISOString(),
+                totalDurationSec,
+                sttProvider: "browser-speech-api",
+                transcriptLanguage: "en-US",
+                conversationTurns: turnsToSave.map((t) => ({
+                  role: t.role,
+                  text: t.text,
+                })),
+              }),
             });
+
+            if (res.ok) {
+              const data = (await res.json()) as {
+                session?: unknown;
+                assessment?: { summary?: string } | null;
+              };
+              if (data.assessment?.summary) {
+                assessmentSummary = data.assessment.summary;
+                setSessionSummary(assessmentSummary);
+              }
+            } else {
+              const errText = await res.text();
+              let errMessage: string | null = null;
+              try {
+                const parsed = JSON.parse(errText) as { error?: string };
+                if (typeof parsed.error === "string") errMessage = parsed.error;
+              } catch {
+                // ignore
+              }
+              console.error(
+                "Failed to complete speaking session:",
+                res.status,
+                errText,
+              );
+              if (errMessage) setError(errMessage);
+            }
           } catch (e) {
-            console.error("Failed to save oral session:", e);
+            console.error("Error while completing speaking session:", e);
           }
         }
-        onSessionEnd?.(topicLabels);
-        setSessionSummary(`Session saved. Topics practiced: ${topicLabels.join(", ")}.`);
+
+        if (topicLabels.length > 0) {
+          onSessionEnd?.(topicLabels);
+          if (!assessmentSummary) {
+            setSessionSummary(
+              `Topics practiced: ${topicLabels.join(", ")}.`,
+            );
+          }
+        }
+      } catch (err) {
+        console.error("Failed to stop conversation:", err);
+        setError("Failed to stop conversation properly");
+        setConversationActive(false);
+      } finally {
+        setIsStopping(false);
       }
-    } catch (err) {
-      console.error("Failed to stop conversation:", err);
-      setError("Failed to stop conversation properly");
-      setConversationActive(false);
-    } finally {
-      setIsStopping(false);
-    }
-  }, [conversation, isStopping, topicLabels, userId, onSessionEnd]);
+    },
+    [
+      conversation,
+      isStopping,
+      onSessionEnd,
+      topicLabels,
+      sessionSummary,
+      coachMode,
+      userId,
+    ],
+  );
 
   const forceStop = useCallback(() => {
     setConversationActive(false);
@@ -367,10 +572,13 @@ export function SpeakingCoach({
     }
   }, [micOn]);
 
+  const coachIsThinking = conversationActive && conversation.status === "connected" && conversation.isSpeaking && !coachAudioPlaying;
+
   const getConnectionStatus = () => {
     if (isStopping) return "Stopping conversation…";
     if (isStarting) return "Starting conversation…";
     if (conversationActive && conversation.status === "connected") {
+      if (coachIsThinking) return "Coach is thinking…";
       return conversation.isSpeaking ? "Coach is speaking" : "Coach is listening";
     }
     return "Ready to start practice";
@@ -386,15 +594,24 @@ export function SpeakingCoach({
         </CardHeader>
         <CardContent className="pb-6 pt-0">
           <div className="flex flex-col gap-y-4 text-center">
-            <div className="mx-auto mt-4 mb-4 flex h-40 w-36 items-center justify-center sm:mt-8 sm:mb-6 sm:h-52 sm:w-44">
-              <video
-                ref={videoRef}
-                src="/bot/Bear_talking.mp4"
-                loop
-                muted
-                playsInline
-                className="h-full w-full rounded-lg object-cover"
-              />
+            <div className="mx-auto mt-4 mb-4 flex h-40 w-36 flex-col items-center justify-center sm:mt-8 sm:mb-6 sm:h-52 sm:w-44">
+              <div className="relative flex h-full w-full items-center justify-center">
+                <video
+                  ref={videoRef}
+                  src="/bot/Bear_talking.mp4"
+                  loop
+                  muted
+                  playsInline
+                  className="h-full w-full rounded-lg object-cover"
+                />
+                {coachIsThinking && (
+                  <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1 rounded-full bg-black/50 px-3 py-1.5" aria-label="Coach is thinking">
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-white" style={{ animationDelay: "0ms", animationDuration: "0.6s" }} />
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-white" style={{ animationDelay: "150ms", animationDuration: "0.6s" }} />
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-white" style={{ animationDelay: "300ms", animationDuration: "0.6s" }} />
+                  </div>
+                )}
+              </div>
             </div>
 
             {error && (
@@ -409,7 +626,14 @@ export function SpeakingCoach({
               </div>
             )}
 
-            <div className="flex max-h-64 flex-col gap-2 overflow-y-auto text-left">
+            <div
+              ref={transcriptRef}
+              className="flex max-h-64 flex-col gap-2 overflow-y-auto text-left select-text"
+              onMouseUp={handleTranscriptMouseUp}
+            >
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                Select text and add to notes below
+              </p>
               {conversationTurns.map((turn, idx) =>
                 turn.role === "user" ? (
                   <div
@@ -450,6 +674,64 @@ export function SpeakingCoach({
                   </p>
                 </div>
               )}
+
+              {selectedTextForNote && (
+                <div className="flex flex-col gap-1 rounded-lg border border-[#ffb347]/50 bg-[#ffb347]/10 p-2">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="default"
+                      className="rounded-full bg-[#ffb347] px-3 text-xs hover:bg-[#ff8c42]"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleAddToNotes();
+                      }}
+                      disabled={savingNote}
+                    >
+                      <Plus className="mr-1 h-3 w-3" />
+                      {savingNote ? "Adding…" : "Add to notes"}
+                    </Button>
+                    <span className="flex-1 truncate text-xs text-muted-foreground" title={selectedTextForNote}>
+                      &quot;{selectedTextForNote.slice(0, 40)}
+                      {selectedTextForNote.length > 40 ? "…" : ""}&quot;
+                    </span>
+                  </div>
+                  {noteError && (
+                    <p className="text-xs text-red-600 dark:text-red-400">{noteError}</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-2 rounded-lg border border-border/60 bg-muted/30">
+              <button
+                type="button"
+                onClick={() => setNotesOpen((o) => !o)}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-foreground hover:bg-muted/50"
+              >
+                <StickyNote className="h-4 w-4 text-[#ffb347]" />
+                My notes ({notes.length})
+              </button>
+              {notesOpen && (
+                <div className="max-h-48 overflow-y-auto border-t border-border/60 px-3 py-2">
+                  {notes.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No notes yet. Select text above and click &quot;Add to notes&quot;.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {notes.map((n) => (
+                        <li
+                          key={n.id}
+                          className="rounded bg-background/80 px-2 py-1.5 text-xs text-foreground"
+                        >
+                          {n.content}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-center">
@@ -479,9 +761,21 @@ export function SpeakingCoach({
                   className="rounded-full px-5"
                   size="lg"
                   onClick={toggleMic}
-                  title={micOn ? "Mute microphone" : "Unmute microphone"}
+                  disabled={coachAudioPlaying}
+                  title={
+                    coachAudioPlaying
+                      ? "Mic paused while coach is speaking"
+                      : micOn
+                        ? "Mute microphone"
+                        : "Unmute microphone"
+                  }
                 >
-                  {micOn ? (
+                  {coachAudioPlaying ? (
+                    <>
+                      <MicOff className="mr-2 h-4 w-4 opacity-60" />
+                      Mic paused
+                    </>
+                  ) : micOn ? (
                     <>
                       <Mic className="mr-2 h-4 w-4" />
                       Mic on

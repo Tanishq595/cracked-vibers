@@ -1,188 +1,145 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import ReactMarkdown from "react-markdown";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/app/components/ui/card";
-import { Button } from "@/app/components/ui/button";
-import { Textarea } from "@/app/components/ui/textarea";
-import { cn } from "@/app/components/ui/utils";
+import { useState } from 'react';
+import { Button } from '@/app/components/ui/button';
+// import ReactMarkdown if you use it for rendering synthesis result
 
-const PLACEHOLDER = `Paste learning materials here (e.g. notes, transcript, textbook excerpt)...
+export default function Dashboard() {
+  const [courses, setCourses] = useState<any[]>([]);
+  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
+  const [assignments, setAssignments] = useState<any[]>([]);
+  const [synthesisResult, setSynthesisResult] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-Example:
-- Photosynthesis: light → chloroplasts → glucose + O2. Requires CO2 and H2O.
-- Cell division: mitosis (somatic) and meiosis (gametes). Chromosomes duplicate in S phase.
-- We didn't cover the Calvin cycle in detail.`;
-
-function extractStudyPlanSection(markdown: string): string {
-  const match = markdown.match(/##\s*Study Plan\s*\n([\s\S]*?)(?=\n##\s|$)/i);
-  return match ? match[1].trim() : "";
-}
-
-export default function DashboardPage() {
-  const [materials, setMaterials] = useState("");
-  const [synthesis, setSynthesis] = useState<{
-    markdown: string;
-    knowledgeGraph: Record<string, unknown> | null;
-  } | null>(null);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [synthLoading, setSynthLoading] = useState(false);
-  const [narrateLoading, setNarrateLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleSynthesize() {
-    setError(null);
-    setSynthesis(null);
-    setAudioUrl(null);
-    setSynthLoading(true);
+  // Step 1: Load user's Canvas courses
+  const fetchCourses = async () => {
+    setLoading(true);
+    setError('');
     try {
-      const res = await fetch("/api/synthesize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ materials }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Synthesis failed");
-      setSynthesis({
-        markdown: data.markdown ?? "",
-        knowledgeGraph: data.knowledgeGraph ?? null,
+      const res = await fetch('/api/canvas/fetch?type=courses');
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error ?? 'Failed to fetch courses');
+      setCourses(json.data ?? []);
+    } catch (err: any) {
+      setError(err.message || 'Canvas connection failed');
+    }
+    setLoading(false);
+  };
+
+  // Step 2: Load assignments for selected course
+  const fetchAssignments = async (courseId: string) => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/canvas/fetch?type=assignments&courseId=${courseId}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error ?? 'Failed to fetch assignments');
+      setAssignments(json.data ?? []);
+      setSelectedCourseId(courseId);
+    } catch (err: any) {
+      setError(err.message);
+    }
+    setLoading(false);
+  };
+
+  // Step 3: The magic — send Canvas data to synthesis
+  const handleSynthesizeWithCanvas = async () => {
+    if (!selectedCourseId || assignments.length === 0) {
+      setError('No course or assignments selected');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    setSynthesisResult('');
+
+    try {
+      // Format Canvas assignments into text for synthesis
+      const canvasText = assignments
+        .map((a: any) => 
+          `Assignment: ${a.name}\n` +
+          `Description: ${a.description?.replace(/<[^>]+>/g, '') || 'No description'}\n` + // strip HTML
+          `Due: ${a.due_at || 'No due date'}\n` +
+          `Points: ${a.points_possible || 'N/A'}`
+        )
+        .join('\n\n');
+
+      // You can combine with other sources later (Notion, YouTube, uploads)
+      const fullMaterials = `Canvas course data:\n${canvasText}`;
+
+      const synthRes = await fetch('/api/synthesize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ materials: fullMaterials }),
       });
 
-      const studyPlanText = extractStudyPlanSection(data.markdown ?? "");
-      if (studyPlanText) {
-        setNarrateLoading(true);
-        try {
-          const narrateRes = await fetch("/api/narrate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: studyPlanText.slice(0, 5000) }),
-          });
-          const narrateData = await narrateRes.json();
-          if (narrateRes.ok && narrateData.audioUrl) setAudioUrl(narrateData.audioUrl);
-        } catch {
-          // Non-blocking: show synthesis even if narration fails
-        } finally {
-          setNarrateLoading(false);
-        }
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong");
-    } finally {
-      setSynthLoading(false);
+      if (!synthRes.ok) throw new Error('Synthesis failed');
+      const synthJson = await synthRes.json();
+
+      setSynthesisResult(synthJson.markdown ?? synthJson.result ?? 'No result returned');
+    } catch (err: any) {
+      setError(err.message || 'Failed to synthesize');
     }
-  }
+    setLoading(false);
+  };
 
   return (
-    <div className="mx-auto max-w-4xl space-y-8 py-8">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-          M.U.S.T.Learn
-        </h1>
-        <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-          Paste materials → get unified synthesis, gap analysis, and a study plan. Listen to the plan.
-        </p>
+    <div className="p-6 max-w-5xl mx-auto">
+      <h1 className="text-3xl font-bold mb-6">M.U.S.T.Learn Dashboard</h1>
+
+      {/* Canvas Section */}
+      <div className="mb-10 border p-6 rounded-lg bg-gray-50">
+        <h2 className="text-2xl font-semibold mb-4">Connect Canvas</h2>
+
+        <Button 
+          onClick={fetchCourses} 
+          disabled={loading || courses.length > 0}
+          className="mb-4"
+        >
+          {loading ? 'Loading...' : 'Load My Canvas Courses'}
+        </Button>
+
+        {error && <p className="text-red-600 mb-4">{error}</p>}
+
+        {courses.length > 0 && (
+          <div className="grid gap-4 md:grid-cols-2">
+            {courses.map((course) => (
+              <div 
+                key={course.id} 
+                className={`border p-4 rounded cursor-pointer hover:bg-blue-50 transition ${selectedCourseId === course.id ? 'bg-blue-100 border-blue-500' : ''}`}
+                onClick={() => fetchAssignments(course.id)}
+              >
+                <h3 className="font-bold">{course.name}</h3>
+                <p className="text-sm text-gray-600">{course.course_code || 'No code'}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {selectedCourseId && assignments.length > 0 && (
+          <div className="mt-6">
+            <h3 className="text-xl font-medium mb-3">Assignments in selected course</h3>
+            <Button 
+              onClick={handleSynthesizeWithCanvas}
+              disabled={loading}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {loading ? 'Synthesizing...' : 'Synthesize This Course with AI'}
+            </Button>
+          </div>
+        )}
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Learning materials</CardTitle>
-          <CardDescription>
-            Combined text from Classroom, Notion, YouTube, or manual paste
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Textarea
-            placeholder={PLACEHOLDER}
-            value={materials}
-            onChange={(e) => setMaterials(e.target.value)}
-            className="min-h-[180px] resize-y font-mono text-sm"
-            disabled={synthLoading}
-          />
-          <Button
-            onClick={handleSynthesize}
-            disabled={synthLoading || !materials.trim()}
-            className="w-full sm:w-auto"
-          >
-            {synthLoading ? (
-              <span className="flex items-center gap-2">
-                <span
-                  className={cn(
-                    "size-4 animate-spin rounded-full border-2 border-current border-t-transparent"
-                  )}
-                />
-                Synthesizing…
-              </span>
-            ) : (
-              "Synthesize Learning Materials"
-            )}
-          </Button>
-        </CardContent>
-      </Card>
-
-      {error && (
-        <div
-          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200"
-          role="alert"
-        >
-          {error}
+      {/* Synthesis Result */}
+      {synthesisResult && (
+        <div className="mt-10 border p-6 rounded-lg bg-white shadow">
+          <h2 className="text-2xl font-semibold mb-4">AI Synthesis Result</h2>
+          <div className="prose max-w-none">
+            {/* Use react-markdown here if you have it installed */}
+            <pre className="whitespace-pre-wrap bg-gray-100 p-4 rounded">{synthesisResult}</pre>
+          </div>
         </div>
-      )}
-
-      {synthesis && (
-        <>
-          <Card>
-            <CardHeader>
-              <CardTitle>Synthesis &amp; study plan</CardTitle>
-              <CardDescription>
-                Topics, knowledge gaps, and prioritized plan (markdown)
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="prose prose-zinc dark:prose-invert max-w-none prose-headings:font-semibold prose-p:leading-relaxed">
-                <ReactMarkdown>{synthesis.markdown}</ReactMarkdown>
-              </div>
-            </CardContent>
-          </Card>
-
-          {(narrateLoading || audioUrl) && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Listen to study plan</CardTitle>
-                <CardDescription>
-                  AI narration of the study plan (MiniMax TTS)
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {narrateLoading && (
-                  <p className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-                    <span
-                      className={cn(
-                        "size-4 animate-spin rounded-full border-2 border-current border-t-transparent"
-                      )}
-                    />
-                    Generating audio…
-                  </p>
-                )}
-                {audioUrl && !narrateLoading && (
-                  <audio
-                    controls
-                    src={audioUrl}
-                    className="w-full max-w-md"
-                    preload="metadata"
-                  >
-                    Your browser does not support the audio element.
-                  </audio>
-                )}
-              </CardContent>
-            </Card>
-          )}
-        </>
       )}
     </div>
   );

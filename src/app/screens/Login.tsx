@@ -1,10 +1,11 @@
 import { motion } from 'motion/react';
-import { Link, useLocation } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { Brain } from 'lucide-react';
 import { SignIn } from '@clerk/clerk-react';
 
-export function Login() {
+const Login: React.FC = () => {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const isSignInPath = pathname.startsWith('/sign-in');
   const clerkPath = isSignInPath ? '/sign-in' : '/login';
 
@@ -54,4 +55,7 @@ export function Login() {
       </motion.div>
     </div>
   );
-}
+};
+
+export { Login };
+export default Login;

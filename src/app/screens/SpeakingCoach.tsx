@@ -3,7 +3,7 @@ import { useLocation } from "react-router";
 import { useUser } from "@clerk/clerk-react";
 import { Info } from "lucide-react";
 import { SpeakingCoach } from "../components/voice/SpeakingCoach";
-import type { CoachContext, CoachMode, DebateSide } from "../components/voice/useConversation";
+import type { CoachContext, CoachMode, DebateSide, ExamType } from "../components/voice/useConversation";
 import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
 
 type LocationState = {
@@ -25,6 +25,7 @@ export function SpeakingCoachScreen() {
   const [infoOpen, setInfoOpen] = useState(false);
   const [debateMotion, setDebateMotion] = useState("");
   const [debateSide, setDebateSide] = useState<DebateSide>("for");
+  const [examType, setExamType] = useState<ExamType>("");
 
   const coachContext: CoachContext | null = (() => {
     const base = state
@@ -40,6 +41,9 @@ export function SpeakingCoachScreen() {
         debateMotion: debateMotion.trim() || undefined,
         debateSide,
       } as CoachContext;
+    }
+    if (mode === "exam") {
+      return { ...base, examType: examType || undefined } as CoachContext;
     }
     return (state ? { ...base } : null) as CoachContext | null;
   })();
@@ -59,8 +63,8 @@ export function SpeakingCoachScreen() {
   }, [timerSeconds]);
 
   return (
-    <div className="min-h-[calc(100vh-64px)] bg-gradient-to-b from-background via-background to-muted/40">
-      <div className="mx-auto max-w-5xl space-y-6 py-10 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-[calc(100vh-64px)] min-w-0 overflow-x-hidden bg-gradient-to-b from-background via-background to-muted/40">
+      <div className="mx-auto max-w-7xl space-y-6 py-10 px-4 sm:px-6 lg:px-8 min-w-0">
         <div className="space-y-2">
           <h1 className="flex items-center gap-2 text-3xl font-semibold tracking-tight text-foreground">
             <span aria-hidden="true">💬</span>
@@ -89,10 +93,10 @@ export function SpeakingCoachScreen() {
           </div>
         )}
 
-        <div className="overflow-hidden rounded-3xl border border-border/60 bg-card/90 shadow-xl shadow-slate-900/5 backdrop-blur-sm">
-          <div className="flex flex-col gap-4 border-b border-border/60 bg-muted/40 px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-8 sm:px-6">
+        <div className="min-w-0 overflow-hidden rounded-3xl border border-border/60 bg-card/90 shadow-xl shadow-slate-900/5 backdrop-blur-sm">
+          <div className="flex flex-wrap items-stretch gap-4 border-b border-border/60 bg-muted/40 px-3 py-3 sm:gap-6 sm:px-6">
             {/* MODE column */}
-            <div className="flex flex-col items-center gap-2 sm:items-center w-full sm:w-auto">
+            <div className="flex min-w-0 flex-1 flex-col items-center gap-2 basis-full sm:basis-auto sm:min-w-[140px]">
               <div className="flex items-center gap-2 text-center">
                 <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                   Mode
@@ -124,9 +128,10 @@ export function SpeakingCoachScreen() {
                         follow-ups so you strengthen weak spots.
                       </li>
                       <li>
-                        <span className="font-medium text-foreground">Exam style</span> — Timed,
-                        exam-like practice with less hand-holding. Use &quot;Start 3-min timer&quot;
-                        for a timed speaking slot.
+                        <span className="font-medium text-foreground">Exam style</span> — Coach
+                        scopes to one exam only: HKDSE, IELTS, TOEFL, or ISO. Choose the exam or
+                        leave Auto to detect from your words. The AI will not answer beyond that
+                        exam&apos;s scope. Use the timer for timed practice.
                       </li>
                       <li>
                         <span className="font-medium text-foreground">Debate</span> — The coach acts
@@ -138,14 +143,14 @@ export function SpeakingCoachScreen() {
                 </Popover>
               </div>
 
-              <div className="w-full">
-                <div className="flex flex-wrap items-center justify-center gap-1 rounded-full bg-background/80 p-1 shadow-sm sm:inline-flex sm:flex-nowrap sm:justify-start">
+              <div className="w-full min-w-0">
+                <div className="flex flex-wrap items-center justify-center gap-1 rounded-full bg-background/80 p-1 shadow-sm">
                   {(["explain", "gaps", "exam", "debate"] as const).map((m) => (
                     <button
                       key={m}
                       type="button"
                       onClick={() => setMode(m)}
-                      className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors sm:px-4 sm:text-sm ${
+                      className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors sm:px-4 sm:text-sm ${
                         mode === m
                           ? "bg-gradient-to-r from-[#ffb347] to-[#ff8c42] text-white shadow-sm"
                           : "text-muted-foreground hover:bg-[#ffb347]/10 hover:text-[#b4690e]"
@@ -164,14 +169,39 @@ export function SpeakingCoachScreen() {
               </div>
             </div>
 
+            {/* EXAM TYPE (only when Exam style is selected) */}
+            {mode === "exam" && (
+              <div className="flex min-w-0 flex-1 flex-col items-center gap-2 basis-full sm:basis-auto sm:min-w-[140px]">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground text-center">
+                  Exam
+                </span>
+                <div className="flex flex-wrap items-center justify-center gap-1 rounded-full bg-background/80 p-1 shadow-sm">
+                  {(["", "HKDSE", "IELTS", "TOEFL", "ISO"] as const).map((e) => (
+                    <button
+                      key={e || "auto"}
+                      type="button"
+                      onClick={() => setExamType(e)}
+                      className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium transition-colors sm:px-3 sm:text-sm ${
+                        examType === e
+                          ? "bg-gradient-to-r from-[#ffb347] to-[#ff8c42] text-white shadow-sm"
+                          : "text-muted-foreground hover:bg-[#ffb347]/10 hover:text-[#b4690e]"
+                      }`}
+                    >
+                      {e === "" ? "Auto" : e}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* TIMER column */}
-            <div className="flex flex-col items-center gap-2 sm:items-center sm:mt-2 w-full sm:w-auto">
+            <div className="flex min-w-0 flex-1 flex-col items-center gap-2 basis-full sm:basis-auto sm:min-w-[140px]">
               <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground text-center">
                 Timer
               </span>
 
-              <div className="w-full">
-                <div className="flex flex-wrap items-center justify-center gap-1 rounded-full bg-background/80 p-1 shadow-sm sm:inline-flex sm:flex-nowrap sm:justify-start">
+              <div className="w-full min-w-0">
+                <div className="flex flex-wrap items-center justify-center gap-1 rounded-full bg-background/80 p-1 shadow-sm">
                   <button
                     type="button"
                     onClick={() => {

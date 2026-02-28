@@ -23,10 +23,18 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useRef, Component, useCallback, type ReactNode } from "react";
 import { useAuth, useUser } from "@clerk/clerk-react";
+import { useNavigate, useSearchParams } from 'react-router';
 import { KnowledgeGraph } from "../components/KnowledgeGraph";
 import { ChatbotGLB } from "../components/ChatbotGLB";
 import { useNavigate, Link } from "react-router";
 import { useTopGaps } from "./GapAnalysis";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
+import { Button } from '../components/ui/button';
 
 const CHAT_HISTORY_KEY = "mustlearn_chat_history_";
 const DEFAULT_GREETING = {
@@ -66,11 +74,67 @@ const platforms: Array<{
   items: number;
   path?: string;
 }> = [
-  { name: 'Google Classroom', icon: BookOpen, color: '#34A853', bgColor: 'bg-emerald-500/10', borderColor: 'border-emerald-500/30', status: 'synced', items: 142 },
-  { name: 'Notion', icon: FileText, color: '#000000', bgColor: 'bg-slate-500/10', borderColor: 'border-slate-500/30', status: 'synced', items: 89 },
+  { name: 'Google Classroom', icon: BookOpen, color: '#34A853', bgColor: 'bg-emerald-500/10', borderColor: 'border-emerald-500/30', status: 'synced', items: 142, path: '/dashboard/classroom' },
+  { name: 'Notion', icon: FileText, color: '#000000', bgColor: 'bg-slate-500/10', borderColor: 'border-slate-500/30', status: 'synced', items: 89, path: '/dashboard/notion' },
   { name: 'YouTube', icon: Youtube, color: '#FF0000', bgColor: 'bg-red-500/10', borderColor: 'border-red-500/30', status: 'synced', items: 0, path: '/dashboard/youtube' },
   { name: 'Canvas', icon: Circle, color: '#E13F2F', bgColor: 'bg-orange-500/10', borderColor: 'border-orange-500/30', status: 'syncing', items: 67 },
 ];
+
+function PlatformIcon({ name, className }: { name: string; className?: string }) {
+  const c = className ?? "w-6 h-6";
+  if (name === "Google Classroom") {
+    return (
+      <svg className={c} viewBox="0 0 578.9 500" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+        <defs>
+          <linearGradient id="gc-linear-1" gradientUnits="userSpaceOnUse" x1="154.8649" y1="295.747" x2="154.8649" y2="282.6343" gradientTransform="matrix(12.992 0 0 -4 -1584.6235 1631.0867)">
+            <stop offset="0" stopColor="#BF360C" stopOpacity="0.2" />
+            <stop offset="1" stopColor="#BF360C" stopOpacity="0.02" />
+          </linearGradient>
+          <radialGradient id="gc-radial-1" cx="131.4012" cy="367.2001" r="18.1966" gradientTransform="matrix(38.0002 0 0 -38 -4973.3276 13965.3232)" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="#FFFFFF" stopOpacity="0.1" />
+            <stop offset="1" stopColor="#FFFFFF" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+        <path fill="#0F9D58" d="M52.6,52.6h473.7v394.7H52.6V52.6z" />
+        <path fill="#57BB8A" d="M394.7,263.2c16.4,0,29.6-13.3,29.6-29.6s-13.3-29.6-29.6-29.6s-29.6,13.3-29.6,29.6 S378.4,263.2,394.7,263.2L394.7,263.2z M394.7,282.9c-31.7,0-65.8,16.8-65.8,37.6v21.6h131.6v-21.6 C460.5,299.7,426.4,282.9,394.7,282.9z M184.2,263.2c16.4,0,29.6-13.3,29.6-29.6s-13.3-29.6-29.6-29.6s-29.6,13.3-29.6,29.6 S167.9,263.2,184.2,263.2L184.2,263.2z M184.2,282.9c-31.7,0-65.8,16.8-65.8,37.6v21.6H250v-21.6 C250,299.7,215.9,282.9,184.2,282.9z" />
+        <path fill="#F7F7F7" d="M289.5,236.8c21.8,0,39.5-17.7,39.4-39.5c0-21.8-17.7-39.5-39.5-39.4c-21.8,0-39.4,17.7-39.4,39.5 C250,219.2,267.7,236.8,289.5,236.8z M289.5,263.2c-44.4,0-92.1,23.6-92.1,52.6v26.3h184.2v-26.3 C381.6,286.7,333.9,263.2,289.5,263.2z" />
+        <path fill="#F1F1F1" d="M342.1,421.1h118.4v26.3H342.1V421.1z" />
+        <path fill="#F4B400" d="M539.5,0h-500C17.7,0,0,17.7,0,39.5v421.1C0,482.3,17.7,500,39.5,500h500c21.8,0,39.5-17.7,39.5-39.5V39.5 C578.9,17.7,561.3,0,539.5,0z M526.3,447.4H52.6V52.6h473.7V447.4z" />
+        <path opacity="0.2" fill="#FFFFFF" d="M539.5,0h-500C17.7,0,0,17.7,0,39.5v3.3C0,21,17.7,3.3,39.5,3.3 h500c21.8,0,39.5,17.7,39.5,39.5v-3.3C578.9,17.7,561.3,0,539.5,0z" />
+        <path opacity="0.2" fill="#BF360C" d="M539.5,496.7h-500C17.7,496.7,0,479,0,457.2v3.3 C0,482.3,17.7,500,39.5,500h500c21.8,0,39.5-17.7,39.5-39.5v-3.3C578.9,479,561.3,496.7,539.5,496.7z" />
+        <path fill="url(#gc-linear-1)" d="M460.3,447.4H341.9l52.6,52.6h118.3L460.3,447.4z" />
+        <path opacity="0.2" fill="#263238" d="M52.6,49.3h473.7v3.3H52.6V49.3z" />
+        <path opacity="0.2" fill="#FFFFFF" d="M52.6,447.4h473.7v3.3H52.6V447.4z" />
+        <path fill="url(#gc-radial-1)" d="M539.5,0h-500C17.7,0,0,17.7,0,39.5v421.1C0,482.3,17.7,500,39.5,500h500 c21.8,0,39.5-17.7,39.5-39.5V39.5C578.9,17.7,561.3,0,539.5,0z" />
+      </svg>
+    );
+  }
+  if (name === "Notion") {
+    return (
+      <svg className={c} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+        <path fillRule="evenodd" clipRule="evenodd" d="M5.716 29.2178L2.27664 24.9331C1.44913 23.9023 1 22.6346 1 21.3299V5.81499C1 3.86064 2.56359 2.23897 4.58071 2.10125L20.5321 1.01218C21.691 0.933062 22.8428 1.24109 23.7948 1.8847L29.3992 5.67391C30.4025 6.35219 31 7.46099 31 8.64426V26.2832C31 28.1958 29.4626 29.7793 27.4876 29.9009L9.78333 30.9907C8.20733 31.0877 6.68399 30.4237 5.716 29.2178Z" fill="white" />
+        <path d="M11.2481 13.5787V13.3756C11.2481 12.8607 11.6605 12.4337 12.192 12.3982L16.0633 12.1397L21.417 20.0235V13.1041L20.039 12.9204V12.824C20.039 12.303 20.4608 11.8732 20.9991 11.8456L24.5216 11.6652V12.1721C24.5216 12.41 24.3446 12.6136 24.1021 12.6546L23.2544 12.798V24.0037L22.1906 24.3695C21.3018 24.6752 20.3124 24.348 19.8036 23.5803L14.6061 15.7372V23.223L16.2058 23.5291L16.1836 23.6775C16.1137 24.1423 15.7124 24.4939 15.227 24.5155L11.2481 24.6926C11.1955 24.1927 11.5701 23.7456 12.0869 23.6913L12.6103 23.6363V13.6552L11.2481 13.5787Z" fill="#000000" />
+        <path fillRule="evenodd" clipRule="evenodd" d="M20.6749 2.96678L4.72347 4.05585C3.76799 4.12109 3.02734 4.88925 3.02734 5.81499V21.3299C3.02734 22.1997 3.32676 23.0448 3.87843 23.7321L7.3178 28.0167C7.87388 28.7094 8.74899 29.0909 9.65435 29.0352L27.3586 27.9454C28.266 27.8895 28.9724 27.1619 28.9724 26.2832V8.64426C28.9724 8.10059 28.6979 7.59115 28.2369 7.27951L22.6325 3.49029C22.0613 3.10413 21.3702 2.91931 20.6749 2.96678ZM5.51447 6.057C5.29261 5.89274 5.3982 5.55055 5.6769 5.53056L20.7822 4.44711C21.2635 4.41259 21.7417 4.54512 22.1309 4.82088L25.1617 6.96813C25.2767 7.04965 25.2228 7.22563 25.0803 7.23338L9.08387 8.10336C8.59977 8.12969 8.12193 7.98747 7.73701 7.7025L5.51447 6.057ZM8.33357 10.8307C8.33357 10.311 8.75341 9.88177 9.29027 9.85253L26.203 8.93145C26.7263 8.90296 27.1667 9.30534 27.1667 9.81182V25.0853C27.1667 25.604 26.7484 26.0328 26.2126 26.0633L9.40688 27.0195C8.8246 27.0527 8.33357 26.6052 8.33357 26.0415V10.8307Z" fill="#000000" />
+      </svg>
+    );
+  }
+  if (name === "YouTube") {
+    return (
+      <svg className={c} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" fill="#FF0000"/>
+      </svg>
+    );
+  }
+  if (name === "Canvas") {
+    return (
+      <svg className={c} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+        <circle cx="12" cy="12" r="10" fill="#E13F2F" />
+        <path fill="#fff" fillRule="evenodd" d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm0 6.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+      </svg>
+    );
+  }
+  return null;
+}
 
 const INSIGHT_CARD_GRADIENTS = [
   { progressColor: 'text-orange-400', stopColors: ['#ffb347', '#ff8c42'], bgGradient: 'from-[#ffb347] to-[#ff8c42]' },
@@ -185,6 +249,11 @@ export function Dashboard() {
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>(() => loadChatHistory(null));
   const [chatLoading, setChatLoading] = useState(false);
   const [youtubeHistoryCount, setYoutubeHistoryCount] = useState<number | null>(null);
+  const [youtubeConnected, setYoutubeConnected] = useState<boolean | null>(null);
+  const [classroomCourseCount, setClassroomCourseCount] = useState<number | null>(null);
+  const [classroomConnected, setClassroomConnected] = useState<boolean | null>(null);
+  const [notionPageCount, setNotionPageCount] = useState<number | null>(null);
+  const [notionConnected, setNotionConnected] = useState<boolean | null>(null);
   const [insightCards, setInsightCards] = useState<Array<{ title: string; subtitle: string; progress: number; synthesisId?: string }>>([]);
   const [insightsLoading, setInsightsLoading] = useState(true);
   const [insightsError, setInsightsError] = useState(false);
@@ -335,6 +404,72 @@ export function Dashboard() {
   }, [getToken]);
 
   useEffect(() => {
+    let cancelled = false;
+    getToken()
+      .then((token) => {
+        if (!token) {
+          setYoutubeConnected(false);
+          return;
+        }
+        return fetch('/api/youtube-data', { method: 'GET', headers: { Authorization: `Bearer ${token}` } });
+      })
+      .then((res) => (res?.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        setYoutubeConnected(data?.connected === true);
+      })
+      .catch(() => {
+        if (!cancelled) setYoutubeConnected(false);
+      });
+    return () => { cancelled = true; };
+  }, [getToken]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/google-classroom-data', { credentials: 'include' })
+      .then((res) => (res.ok ? res.json() : { connected: false }))
+      .then((data) => {
+        if (cancelled) return;
+        const list = Array.isArray(data?.courses) ? data.courses : [];
+        setClassroomConnected(data?.connected === true);
+        setClassroomCourseCount(data?.connected ? list.length : 0);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setClassroomConnected(false);
+          setClassroomCourseCount(0);
+        }
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    getToken()
+      .then((token) => {
+        if (!token) {
+          setNotionConnected(false);
+          return;
+        }
+        return fetch('/api/notion-data', { method: 'GET', headers: { Authorization: `Bearer ${token}` } });
+      })
+      .then((res) => (res?.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        setNotionConnected(data?.connected === true);
+        const pages = Array.isArray(data?.pages) ? data.pages : [];
+        setNotionPageCount(data?.connected ? pages.length : 0);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setNotionConnected(false);
+          setNotionPageCount(0);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [getToken]);
+
+  useEffect(() => {
     if (userId === null) return;
     getToken()
       .then((t) => {
@@ -359,6 +494,129 @@ export function Dashboard() {
   useEffect(() => {
     if (messages.length > 0) saveChatHistory(userId, messages);
   }, [messages, userId]);
+
+  // Canvas connect state
+  const [canvasOpen, setCanvasOpen] = useState(false);
+  const [canvasCourses, setCanvasCourses] = useState<{ id: number; name: string; course_code?: string }[]>([]);
+  const [canvasSelectedCourseId, setCanvasSelectedCourseId] = useState<string | null>(null);
+  const [canvasAssignments, setCanvasAssignments] = useState<{ id: number; name: string; description?: string; due_at?: string; points_possible?: number }[]>([]);
+  const [canvasLoading, setCanvasLoading] = useState(false);
+  const [canvasError, setCanvasError] = useState<string | null>(null);
+  const [canvasSynthesis, setCanvasSynthesis] = useState<string | null>(null);
+  const [canvasAuthLoading, setCanvasAuthLoading] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Clear ?canvas=connected or ?canvas=error from URL after showing once
+  useEffect(() => {
+    const canvasParam = searchParams.get('canvas');
+    if (canvasParam === 'connected' || canvasParam === 'error') {
+      const next = new URLSearchParams(searchParams);
+      next.delete('canvas');
+      next.delete('message');
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  const handleSignInWithCanvas = async () => {
+    setCanvasAuthLoading(true);
+    setCanvasError(null);
+    try {
+      const token = await getToken({ skipCache: true });
+      if (!token) {
+        setCanvasError('Please sign in first, then connect Canvas.');
+        setCanvasAuthLoading(false);
+        return;
+      }
+      // Form POST avoids fetch/auth-header issues: server gets token from body and redirects to Canvas
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = '/api/canvas/auth-url';
+      form.style.display = 'none';
+      const input = document.createElement('input');
+      input.name = 'token';
+      input.value = token;
+      input.type = 'hidden';
+      form.appendChild(input);
+      document.body.appendChild(form);
+      form.submit();
+    } catch (err) {
+      setCanvasError(err instanceof Error ? err.message : 'Failed to connect to Canvas');
+      setCanvasAuthLoading(false);
+    }
+  };
+
+  const fetchCanvasCourses = async () => {
+    setCanvasLoading(true);
+    setCanvasError(null);
+    try {
+      const token = await getToken();
+      const res = await fetch('/api/canvas/fetch?type=courses', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error ?? 'Failed to fetch courses');
+      setCanvasCourses(Array.isArray(json.data) ? json.data : []);
+    } catch (err) {
+      setCanvasError(
+        err instanceof Error ? err.message : 'Canvas connection failed. Sign in with Canvas first.'
+      );
+    } finally {
+      setCanvasLoading(false);
+    }
+  };
+
+  const fetchCanvasAssignments = async (courseId: string) => {
+    setCanvasLoading(true);
+    setCanvasError(null);
+    try {
+      const token = await getToken();
+      const res = await fetch(`/api/canvas/fetch?type=assignments&courseId=${courseId}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error ?? 'Failed to fetch assignments');
+      setCanvasAssignments(Array.isArray(json.data) ? json.data : []);
+      setCanvasSelectedCourseId(courseId);
+    } catch (err) {
+      setCanvasError(err instanceof Error ? err.message : 'Failed to fetch assignments');
+    } finally {
+      setCanvasLoading(false);
+    }
+  };
+
+  const handleSynthesizeWithCanvas = async () => {
+    if (!canvasSelectedCourseId || canvasAssignments.length === 0) {
+      setCanvasError('Select a course and load assignments first');
+      return;
+    }
+    setCanvasLoading(true);
+    setCanvasError(null);
+    setCanvasSynthesis(null);
+    try {
+      const canvasText = canvasAssignments
+        .map(
+          (a) =>
+            `Assignment: ${a.name}\n` +
+            `Description: ${(a.description ?? '').replace(/<[^>]+>/g, '') || 'No description'}\n` +
+            `Due: ${a.due_at ?? 'No due date'}\n` +
+            `Points: ${a.points_possible ?? 'N/A'}`
+        )
+        .join('\n\n');
+      const fullMaterials = `Canvas course data:\n${canvasText}`;
+      const synthRes = await fetch('/api/synthesize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ materials: fullMaterials }),
+      });
+      if (!synthRes.ok) throw new Error('Synthesis failed');
+      const synthJson = await synthRes.json();
+      setCanvasSynthesis(synthJson.markdown ?? synthJson.result ?? '');
+    } catch (err) {
+      setCanvasError(err instanceof Error ? err.message : 'Failed to synthesize');
+    } finally {
+      setCanvasLoading(false);
+    }
+  };
 
   const handleSendMessage = useCallback(async () => {
     if (!inputText.trim() || chatLoading) return;
@@ -593,6 +851,8 @@ export function Dashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {platforms.map((platform, index) => {
             const Icon = platform.icon;
+            const isCanvas = platform.name === 'Canvas';
+            const useBrandSvg = ['Google Classroom', 'Notion', 'YouTube'].includes(platform.name);
             return (
               <motion.div
                 key={platform.name}
@@ -603,25 +863,48 @@ export function Dashboard() {
                 whileTap={{ scale: 0.98 }}
                 onClick={() => {
                   if (platform.path) navigate(platform.path);
+                  else if (isCanvas) setCanvasOpen(true);
                 }}
                 className={`relative overflow-hidden rounded-2xl bg-card border-2 ${platform.borderColor} p-6 cursor-pointer group hover:shadow-lg hover:shadow-black/20 transition-all`}
+                role={isCanvas ? 'button' : undefined}
+                tabIndex={isCanvas ? 0 : undefined}
+                onKeyDown={isCanvas ? (e) => e.key === 'Enter' && setCanvasOpen(true) : undefined}
               >
                 <div className={`absolute top-0 right-0 w-32 h-32 ${platform.bgColor} rounded-full blur-3xl opacity-50 group-hover:opacity-100 transition-opacity`} />
                 
                 <div className="relative">
                   <div className="flex items-start justify-between mb-4">
                     <div className={`w-12 h-12 ${platform.bgColor} rounded-xl flex items-center justify-center border ${platform.borderColor}`}>
-                      <Icon className="w-6 h-6" style={{ color: platform.color }} />
+                      {useBrandSvg ? (
+                        <PlatformIcon name={platform.name} className="w-6 h-6" />
+                      ) : (
+                        <Icon className="w-6 h-6" style={{ color: platform.color }} />
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${
-                        platform.status === 'synced' ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'
-                      }`} />
-                      <span className={`text-xs font-semibold ${
-                        platform.status === 'synced' ? 'text-emerald-400' : 'text-amber-400'
-                      }`}>
-                        {platform.status === 'synced' ? 'Synced' : 'Syncing...'}
-                      </span>
+                      {(() => {
+                        const connected = platform.name === 'YouTube'
+                          ? youtubeConnected
+                          : platform.name === 'Google Classroom'
+                            ? classroomConnected
+                            : platform.name === 'Notion'
+                              ? notionConnected
+                              : platform.status === 'synced';
+                        const isSynced = connected === true;
+                        const isChecking = connected === null && (platform.name === 'YouTube' || platform.name === 'Google Classroom' || platform.name === 'Notion');
+                        return (
+                          <>
+                            <div className={`w-2 h-2 rounded-full ${
+                              isSynced ? 'bg-emerald-500' : isChecking ? 'bg-amber-500 animate-pulse' : 'bg-slate-400'
+                            }`} />
+                            <span className={`text-xs font-semibold ${
+                              isSynced ? 'text-emerald-400' : isChecking ? 'text-amber-400' : 'text-muted-foreground'
+                            }`}>
+                              {isSynced ? 'Synced' : isChecking ? 'Checking...' : 'Not connected'}
+                            </span>
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                   
@@ -631,7 +914,15 @@ export function Dashboard() {
                       ? youtubeHistoryCount !== null
                         ? `${youtubeHistoryCount} items`
                         : '… items'
-                      : `${platform.items} items`}
+                      : platform.name === 'Google Classroom'
+                        ? classroomCourseCount !== null
+                          ? `${classroomCourseCount} course${classroomCourseCount !== 1 ? 's' : ''}`
+                          : '… courses'
+                        : platform.name === 'Notion'
+                          ? notionPageCount !== null
+                            ? `${notionPageCount} page${notionPageCount !== 1 ? 's' : ''}`
+                            : '… pages'
+                          : `${platform.items} items`}
                   </p>
                 </div>
               </motion.div>
@@ -746,7 +1037,7 @@ export function Dashboard() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 + index * 0.1 }}
                 whileHover={{ scale: 1.03, y: -6 }}
-                className="relative overflow-hidden rounded-2xl bg-card border border-slate-200 p-6 hover:border-[#ffb347]/50 transition-all group shadow-sm"
+                className="relative overflow-hidden rounded-2xl bg-card border border-slate-200 p-6 hover:border-[#ffb347]/50 transition-all group shadow-sm flex flex-col h-full"
               >
                 <div className="flex items-start gap-4 mb-4">
                   <div className="relative w-20 h-20 flex-shrink-0">
@@ -774,7 +1065,7 @@ export function Dashboard() {
                     whileHover={{ x: 4 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => navigate('/dashboard/synthesize', insight.synthesisId ? { state: { openSynthesisId: insight.synthesisId } } : undefined)}
-                    className={`flex-1 min-w-[140px] px-4 py-3 bg-gradient-to-r ${style.bgGradient} text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg`}
+                    className={`flex-1 min-w-[140px] px-4 py-3 bg-gradient-to-r ${style.bgGradient} text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg mt-auto`}
                   >
                     Continue Learning
                   </motion.button>
@@ -972,14 +1263,8 @@ export function Dashboard() {
                 <div className="absolute top-2 right-2 px-2 py-1 bg-black/60 backdrop-blur-sm rounded-lg border border-white/10">
                   <span className="text-xs text-white font-semibold">{item.time}</span>
                 </div>
-                <div 
-                  className="absolute top-2 left-2 w-8 h-8 rounded-lg flex items-center justify-center backdrop-blur-sm border"
-                  style={{ 
-                    backgroundColor: `${item.platformColor}20`,
-                    borderColor: `${item.platformColor}40`
-                  }}
-                >
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.platformColor }} />
+                <div className="absolute top-2 left-2 w-8 h-8 rounded-lg flex items-center justify-center bg-white/90 backdrop-blur-sm border border-white/20 shadow-sm">
+                  <PlatformIcon name={item.platform === 'Classroom' ? 'Google Classroom' : item.platform} className="w-5 h-5" />
                 </div>
               </div>
 
@@ -1012,6 +1297,89 @@ export function Dashboard() {
           <p className="text-sm text-muted-foreground mt-2">Your AI learning companion is always here to help 🧡</p>
         </div>
       </motion.div>
+
+      {/* Canvas Connect Dialog */}
+      <Dialog open={canvasOpen} onOpenChange={setCanvasOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Connect Canvas</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Sign in with your Canvas account so we can access your courses and documents. After connecting, you can load courses and synthesize them with AI.
+            </p>
+            <Button
+              onClick={handleSignInWithCanvas}
+              disabled={canvasAuthLoading}
+              className="bg-[#E13F2F] hover:bg-[#c23528] w-full sm:w-auto"
+            >
+              {canvasAuthLoading ? 'Redirecting...' : 'Sign in with Canvas'}
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Already connected? Load your courses below.
+            </p>
+            <Button
+              variant="outline"
+              onClick={fetchCanvasCourses}
+              disabled={canvasLoading || canvasCourses.length > 0}
+              className="border-[#E13F2F]/50 text-[#E13F2F] hover:bg-[#E13F2F]/10"
+            >
+              {canvasLoading && !canvasCourses.length ? 'Loading...' : 'Load My Canvas Courses'}
+            </Button>
+            {canvasError && (
+              <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+                {canvasError}
+              </p>
+            )}
+            {canvasCourses.length > 0 && (
+              <div className="grid gap-2 md:grid-cols-2">
+                {canvasCourses.map((course) => (
+                  <button
+                    key={course.id}
+                    type="button"
+                    onClick={() => fetchCanvasAssignments(String(course.id))}
+                    className={`rounded-lg border-2 p-4 text-left transition ${
+                      canvasSelectedCourseId === String(course.id)
+                        ? 'border-[#E13F2F] bg-[#E13F2F]/10'
+                        : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <h4 className="font-semibold text-foreground">{course.name}</h4>
+                    <p className="text-xs text-muted-foreground">{course.course_code ?? 'No code'}</p>
+                  </button>
+                ))}
+              </div>
+            )}
+            {canvasSelectedCourseId && canvasAssignments.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-medium text-foreground">Assignments in selected course</h4>
+                <Button
+                  onClick={handleSynthesizeWithCanvas}
+                  disabled={canvasLoading}
+                  className="bg-emerald-600 hover:bg-emerald-700"
+                >
+                  {canvasLoading ? 'Synthesizing...' : 'Synthesize This Course with AI'}
+                </Button>
+              </div>
+            )}
+            {canvasSynthesis && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 dark:bg-slate-900 p-4">
+                <h4 className="font-medium text-foreground mb-2">AI Synthesis Result</h4>
+                <pre className="whitespace-pre-wrap text-sm text-foreground overflow-x-auto max-h-60 overflow-y-auto">
+                  {canvasSynthesis}
+                </pre>
+                <Button
+                  variant="outline"
+                  className="mt-3"
+                  onClick={() => navigate('/dashboard/synthesize')}
+                >
+                  Open in Synthesize
+                </Button>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* AI Chatbot Modal */}
       <AnimatePresence>

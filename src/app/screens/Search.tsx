@@ -186,38 +186,39 @@ export function Search() {
         className="mb-6 md:mb-8"
       >
         <form onSubmit={handleSubmit}>
-          <div className="relative group">
-            <SearchIcon className="absolute left-4 md:left-6 top-1/2 -translate-y-1/2 w-5 md:w-6 h-5 md:h-6 text-slate-400 group-focus-within:text-[#ffb347] transition-colors" />
-            <Sparkles className="absolute right-4 md:right-6 top-1/2 -translate-y-1/2 w-5 md:w-6 h-5 md:h-6 text-[#ffb347] opacity-60 group-focus-within:opacity-100 transition-opacity hidden md:block" />
+          <div className="group w-full rounded-2xl border-2 border-slate-200 bg-white hover:bg-slate-50 text-slate-900 shadow-sm transition-all focus-within:border-[#ffb347] focus-within:ring-4 focus-within:ring-[#ffb347]/20 focus-within:shadow-lg px-4 md:px-6 py-3 md:py-4 flex items-center gap-3">
+            <SearchIcon className="w-5 md:w-6 h-5 md:h-6 text-slate-400 group-focus-within:text-[#ffb347] transition-colors" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => handleSearch(e.target.value)}
               placeholder={searchInLibrary ? 'Search inside your library documents…' : 'What do you want to learn about?'}
-              className="w-full pl-12 md:pl-16 pr-12 md:pr-16 py-5 md:py-6 text-lg md:text-xl bg-white hover:bg-slate-50 focus:bg-white border-2 border-slate-200 focus:border-[#ffb347] focus:ring-4 focus:ring-[#ffb347]/20 rounded-2xl text-slate-900 placeholder-slate-400 outline-none transition-all shadow-sm focus:shadow-lg"
+              className="flex-1 min-w-0 bg-transparent text-lg md:text-xl placeholder-slate-400 outline-none border-none"
             />
-          </div>
-          <div className="mt-4 flex items-center justify-center gap-3">
-            <span className={cn('text-sm font-medium', !searchInLibrary && 'text-slate-900')}>Web</span>
-            <Switch
-              checked={searchInLibrary}
-              onCheckedChange={setSearchInLibrary}
-              aria-label="Search my library"
-            />
-            <Label htmlFor="search-mode" className="text-sm font-medium cursor-pointer">
-              <span className={cn(searchInLibrary && 'text-slate-900')}>My library</span>
-            </Label>
+            <div className="inline-flex items-center gap-3 px-4 py-2 bg-white border border-slate-200 rounded-full shadow-sm">
+              <span className={cn('text-lg md:text-xl font-semibold', !searchInLibrary && 'text-slate-900')}>
+                Web
+              </span>
+              <Switch
+                checked={searchInLibrary}
+                onCheckedChange={setSearchInLibrary}
+                aria-label="Search my library"
+              />
+              <Label htmlFor="search-mode" className="text-lg md:text-xl font-semibold cursor-pointer">
+                <span className={cn(searchInLibrary && 'text-slate-900')}>My library</span>
+              </Label>
+            </div>
           </div>
         </form>
 
         {/* Search Suggestions */}
         {!showResults && (
           <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="flex flex-wrap gap-2 mt-4 justify-center"
-          >
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="flex flex-wrap items-center gap-2 mt-4 justify-center"
+        >
             <span className="text-sm text-slate-500 font-semibold">Try:</span>
             {suggestions.map((suggestion) => (
               <motion.button
