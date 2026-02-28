@@ -50,6 +50,7 @@ export default async function handler(
       ? prefix.trim()
       : "uploads";
 
+  console.log("[storage-list] request", { prefix: safePrefix });
   try {
     const client = getS3Client();
     const command = new ListObjectsV2Command({
@@ -65,9 +66,10 @@ export default async function handler(
         lastModified: obj.LastModified?.toISOString() ?? null,
       })) ?? [];
 
+    console.log("[storage-list] done", { itemCount: items.length });
     res.status(200).json({ items });
   } catch (error) {
-    console.error("[storage-list] error:", error);
+    console.error("[storage-list] error", error);
     res.status(500).json({ error: "Failed to list objects" });
   }
 }

@@ -719,30 +719,30 @@ export function Synthesize() {
                   <DialogHeader>
                     <DialogTitle>Select materials</DialogTitle>
                   </DialogHeader>
-                <div className="mt-2 space-y-3">
+                <div className="mt-1 space-y-4">
                   {libraryError && (
-                    <p className="text-xs text-red-600">{libraryError}</p>
+                    <p className="text-sm text-red-600">{libraryError}</p>
                   )}
                   {libraryLoading && (
-                    <p className="flex items-center gap-2 text-xs text-zinc-500">
+                    <p className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Loader2 className="w-4 h-4 animate-spin" />
                       Loading files…
                     </p>
                   )}
                   {!libraryLoading && libraryItems.length === 0 && !libraryError && (
-                    <p className="text-xs text-zinc-500">
+                    <p className="text-sm text-muted-foreground">
                       No files in your library yet. Upload from the Library page first.
                     </p>
                   )}
                   {!libraryLoading && libraryItems.length > 0 && (
-                    <div className="max-h-64 space-y-4 overflow-auto text-sm">
+                    <div className="max-h-[320px] space-y-4 overflow-y-auto pr-1 text-sm">
                       {libraryItemsByFolder.uncategorized.length > 0 && (
                         <section>
                           <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                             <Folder className="w-4 h-4" />
                             Uncategorized
                           </h3>
-                          <ul className="space-y-2">
+                          <ul className="space-y-1.5">
                             {libraryItemsByFolder.uncategorized.map((item) => {
                               const name = item.key.split("/").pop() || item.key;
                               const last =
@@ -750,22 +750,31 @@ export function Synthesize() {
                                 !Number.isNaN(Date.parse(item.lastModified))
                                   ? new Date(item.lastModified).toLocaleString()
                                   : "Unknown";
+                              const isSelected = pendingLibrarySelectedKeys.includes(item.key);
                               return (
-                                <li
-                                  key={item.key}
-                                  className="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 hover:border-[#ffb347] hover:bg-[#ffb347]/5 dark:border-slate-700"
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={pendingLibrarySelectedKeys.includes(item.key)}
-                                    onChange={() => togglePendingLibrarySelected(item.key)}
-                                    className="h-4 w-4 rounded border-slate-300 text-[#ffb347] focus:ring-[#ffb347]"
-                                  />
-                                  <FileText className="w-4 h-4 text-slate-500 shrink-0" />
-                                  <div className="min-w-0 flex-1">
-                                    <p className="truncate font-medium text-foreground">{name}</p>
-                                    <p className="truncate text-[11px] text-zinc-500">{last}</p>
-                                  </div>
+                                <li key={item.key}>
+                                  <button
+                                    type="button"
+                                    onClick={() => togglePendingLibrarySelected(item.key)}
+                                    className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                                      isSelected
+                                        ? "border-[#ffb347] bg-[#ffb347]/15 dark:bg-[#ffb347]/20"
+                                        : "border-slate-200 hover:border-[#ffb347]/50 hover:bg-[#ffb347]/5 dark:border-slate-700"
+                                    }`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => togglePendingLibrarySelected(item.key)}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="h-4 w-4 rounded border-slate-300 text-[#ffb347] focus:ring-[#ffb347]"
+                                    />
+                                    <FileText className="w-4 h-4 text-slate-500 shrink-0" />
+                                    <div className="min-w-0 flex-1 overflow-hidden">
+                                      <p className="break-all font-medium text-foreground" title={name}>{name}</p>
+                                      <p className="truncate text-[11px] text-muted-foreground">{last}</p>
+                                    </div>
+                                  </button>
                                 </li>
                               );
                             })}
@@ -781,7 +790,7 @@ export function Synthesize() {
                               <Folder className="w-4 h-4" />
                               {folder.name}
                             </h3>
-                            <ul className="space-y-2">
+                            <ul className="space-y-1.5">
                               {items.map((item) => {
                                 const name = item.key.split("/").pop() || item.key;
                                 const last =
@@ -789,22 +798,31 @@ export function Synthesize() {
                                   !Number.isNaN(Date.parse(item.lastModified))
                                     ? new Date(item.lastModified).toLocaleString()
                                     : "Unknown";
+                                const isSelected = pendingLibrarySelectedKeys.includes(item.key);
                                 return (
-                                  <li
-                                    key={item.key}
-                                    className="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 hover:border-[#ffb347] hover:bg-[#ffb347]/5 dark:border-slate-700"
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={pendingLibrarySelectedKeys.includes(item.key)}
-                                      onChange={() => togglePendingLibrarySelected(item.key)}
-                                      className="h-4 w-4 rounded border-slate-300 text-[#ffb347] focus:ring-[#ffb347]"
-                                    />
-                                    <FileText className="w-4 h-4 text-slate-500 shrink-0" />
-                                    <div className="min-w-0 flex-1">
-                                      <p className="truncate font-medium text-foreground">{name}</p>
-                                      <p className="truncate text-[11px] text-zinc-500">{last}</p>
-                                    </div>
+                                  <li key={item.key}>
+                                    <button
+                                      type="button"
+                                      onClick={() => togglePendingLibrarySelected(item.key)}
+                                      className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                                        isSelected
+                                          ? "border-[#ffb347] bg-[#ffb347]/15 dark:bg-[#ffb347]/20"
+                                          : "border-slate-200 hover:border-[#ffb347]/50 hover:bg-[#ffb347]/5 dark:border-slate-700"
+                                      }`}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={isSelected}
+                                        onChange={() => togglePendingLibrarySelected(item.key)}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="h-4 w-4 rounded border-slate-300 text-[#ffb347] focus:ring-[#ffb347]"
+                                      />
+                                      <FileText className="w-4 h-4 text-slate-500 shrink-0" />
+                                      <div className="min-w-0 flex-1 overflow-hidden">
+                                        <p className="break-all font-medium text-foreground" title={name}>{name}</p>
+                                        <p className="truncate text-[11px] text-muted-foreground">{last}</p>
+                                      </div>
+                                    </button>
                                   </li>
                                 );
                               })}
@@ -815,7 +833,7 @@ export function Synthesize() {
                     </div>
                   )}
                 </div>
-                <DialogFooter>
+                <DialogFooter className="gap-2 sm:gap-0">
                   <Button type="button" variant="outline" onClick={() => setLibraryDialogOpen(false)}>
                     Cancel
                   </Button>

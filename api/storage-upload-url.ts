@@ -52,7 +52,7 @@ export default async function handler(
     return;
   }
 
-  const { objectKey, contentType } = req.body as {
+  const { objectKey, contentType } = (req.body ?? {}) as {
     objectKey?: string;
     contentType?: string;
   };
@@ -62,6 +62,7 @@ export default async function handler(
     return;
   }
 
+  console.log("[storage-upload-url] request", { objectKey: objectKey.slice(-60), contentType: contentType ?? "octet-stream" });
   try {
     const client = getS3Client();
     const command = new PutObjectCommand({
@@ -71,10 +72,10 @@ export default async function handler(
     });
 
     const url = await getSignedUrl(client, command, { expiresIn: 60 * 5 });
-
+    console.log("[storage-upload-url] done");
     res.status(200).json({ url });
   } catch (error) {
-    console.error("[storage-upload-url] error:", error);
+    console.error("[storage-upload-url] error", error);
     res.status(500).json({ error: "Failed to create upload URL" });
   }
 }

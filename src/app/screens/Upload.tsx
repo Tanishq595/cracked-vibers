@@ -8,7 +8,7 @@ import {
   XCircle,
   Loader2,
   Cloud,
-  Trash2,
+  X,
 } from "lucide-react";
 
 type FileStatus = "pending" | "uploading" | "done" | "error";
@@ -24,7 +24,12 @@ function sanitize(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 200);
 }
 
-export function Upload() {
+interface UploadProps {
+  /** When true, hide the page title/description (e.g. when used inside a dialog). */
+  embedded?: boolean;
+}
+
+export function Upload({ embedded = false }: UploadProps) {
   const { user } = useUser();
   const [files, setFiles] = useState<QueuedFile[]>([]);
   const [dragActive, setDragActive] = useState(false);
@@ -134,22 +139,24 @@ export function Upload() {
   const doneCount = files.filter((f) => f.status === "done").length;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-8 py-8">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Upload files</h1>
+    <div className={embedded ? "space-y-5" : "mx-auto max-w-2xl space-y-8 py-8"}>
+      {!embedded && (
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Upload files</h1>
         <p className="mt-1 text-muted-foreground">
           Add notes, PDFs, or other learning materials. They’re stored securely and can be used for synthesis and search.
         </p>
-      </div>
+        </div>
+      )}
 
       {/* Drop zone */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        className={`relative rounded-2xl border-2 border-dashed p-10 text-center transition-colors ${
+        className={`relative rounded-2xl border-2 border-dashed text-center transition-colors ${embedded ? "p-8" : "p-10"} ${
           dragActive
             ? "border-[#ff8c42] bg-[#ffb347]/10"
-            : "border-slate-300 dark:border-slate-600 bg-card hover:border-[#ffb347]/50"
+            : "border-slate-300 dark:border-slate-600 bg-slate-50/50 dark:bg-slate-900/30 hover:border-[#ffb347]/60 hover:bg-[#ffb347]/5"
         }`}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
@@ -184,25 +191,32 @@ export function Upload() {
           >
             <div className="flex flex-wrap items-center justify-between gap-4">
               <p className="text-sm text-muted-foreground">
-                {files.length} file(s) • {pendingCount} pending • {doneCount} uploaded
+                <span className="font-medium text-foreground">{files.length}</span> file(s)
+                {pendingCount > 0 && (
+                  <span> · <span className="font-medium text-amber-600 dark:text-amber-400">{pendingCount} pending</span></span>
+                )}
+                {doneCount > 0 && (
+                  <span> · <span className="text-emerald-600 dark:text-emerald-400">{doneCount} uploaded</span></span>
+                )}
               </p>
               <div className="flex gap-2">
                 {pendingCount > 0 && (
                   <motion.button
+                    type="button"
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={uploadAll}
                     disabled={uploading}
-                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#ffb347] to-[#ff8c42] text-white font-semibold shadow-lg disabled:opacity-70"
+                    className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#ffb347] to-[#ff8c42] px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:shadow-lg disabled:opacity-70 transition-shadow"
                   >
                     {uploading ? (
                       <>
-                        <Loader2 className="inline w-4 h-4 mr-2 animate-spin" />
+                        <Loader2 className="w-4 h-4 animate-spin" />
                         Uploading…
                       </>
                     ) : (
                       <>
-                        <UploadIcon className="inline w-4 h-4 mr-2" />
+                        <UploadIcon className="w-4 h-4" />
                         Upload all
                       </>
                     )}
@@ -212,7 +226,7 @@ export function Upload() {
                   <button
                     type="button"
                     onClick={clearDone}
-                    className="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-foreground font-medium hover:bg-slate-100 dark:hover:bg-slate-800"
+                    className="rounded-xl border border-slate-300 dark:border-slate-600 bg-background px-4 py-2.5 text-sm font-medium text-foreground hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                   >
                     Clear list
                   </button>
@@ -220,7 +234,7 @@ export function Upload() {
               </div>
             </div>
 
-            <ul className="space-y-2">
+            <ul className="space-y-2 max-h-[280px] overflow-auto pr-1">
               <AnimatePresence>
                 {files.map((item, index) => (
                   <motion.li
@@ -228,7 +242,7 @@ export function Upload() {
                     initial={{ opacity: 0, x: -8 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 8 }}
-                    className="flex items-center gap-4 rounded-xl bg-card border border-slate-200 dark:border-slate-700 p-3 min-w-0"
+                    className="flex items-center gap-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/50 p-3 min-w-0 shadow-sm"
                   >
                     <FileText className="w-5 h-5 text-slate-500 flex-shrink-0" />
                     <div className="min-w-0 flex-1 overflow-hidden">
@@ -237,7 +251,8 @@ export function Upload() {
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {(item.file.size / 1024).toFixed(1)} KB
-                        {item.status === "done" && " • Uploaded"}
+                        {item.status === "done" && " · Uploaded"}
+                        {item.status === "error" && " · Failed"}
                       </p>
                       {item.error && (
                         <p className="text-xs text-red-500 mt-0.5">{item.error}</p>
@@ -248,7 +263,7 @@ export function Upload() {
                         <button
                           type="button"
                           onClick={() => uploadOne(index)}
-                          className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600"
+                          className="p-2 rounded-lg hover:bg-[#ffb347]/10 text-slate-500 hover:text-[#ff8c42] transition-colors"
                           title="Upload this file"
                         >
                           <UploadIcon className="w-4 h-4" />
@@ -266,10 +281,11 @@ export function Upload() {
                       <button
                         type="button"
                         onClick={() => removeFile(index)}
-                        className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-500 hover:text-red-500"
+                        className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 transition-colors"
                         title="Remove"
+                        aria-label="Remove"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <X className="w-4 h-4" />
                       </button>
                     </div>
                   </motion.li>

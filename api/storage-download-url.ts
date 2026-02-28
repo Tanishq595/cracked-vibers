@@ -52,6 +52,7 @@ export default async function handler(
     return;
   }
 
+  console.log("[storage-download-url] request", { objectKey: objectKey.slice(-60) });
   try {
     const client = getS3Client();
     const command = new GetObjectCommand({
@@ -60,10 +61,10 @@ export default async function handler(
     });
 
     const url = await getSignedUrl(client, command, { expiresIn: 60 * 5 });
-
+    console.log("[storage-download-url] done");
     res.status(200).json({ url });
   } catch (error) {
-    console.error("[storage-download-url] error:", error);
+    console.error("[storage-download-url] error", error);
     res.status(500).json({ error: "Failed to create download URL" });
   }
 }

@@ -7,6 +7,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 const EXA_SEARCH_URL = "https://api.exa.ai/search";
+const LOG = "[search-exa]";
 
 interface ExaResult {
   title?: string;
@@ -35,6 +36,7 @@ export default async function handler(
 
   const apiKey = process.env.EXA_API_KEY;
   if (!apiKey) {
+    console.warn(LOG, "EXA_API_KEY not set");
     res.status(500).json({
       error: "Exa search is not configured. Set EXA_API_KEY in environment.",
     });
@@ -43,7 +45,9 @@ export default async function handler(
 
   const query =
     typeof req.body?.query === "string" ? req.body.query.trim() : "";
+  console.log(LOG, "request", { query: query.slice(0, 80) });
   if (!query) {
+    console.warn(LOG, "missing query");
     res.status(400).json({ error: "Missing or empty 'query' in body" });
     return;
   }
@@ -72,6 +76,7 @@ export default async function handler(
     };
 
     if (!exaRes.ok) {
+      console.warn(LOG, "exa error", exaRes.status, data.message ?? data.error);
       res.status(exaRes.status).json({
         error: data.message ?? data.error ?? "Exa search failed",
       });
@@ -88,9 +93,11 @@ export default async function handler(
           : r.text?.slice(0, 300)),
     }));
 
+    console.log(LOG, "done", { resultsCount: results.length, requestId: data.requestId });
     res.status(200).json({ results, requestId: data.requestId });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Search failed";
+    console.error(LOG, "error", e);
     res.status(500).json({ error: message });
   }
 }

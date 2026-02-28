@@ -548,7 +548,10 @@ export function Library() {
                 <DialogTitle>Upload files</DialogTitle>
               </DialogHeader>
               <div className="mt-2">
-                <Upload />
+                <p className="text-sm text-muted-foreground mb-4">
+                  Add notes, PDFs, or other learning materials. They're stored securely and can be used for synthesis and search.
+                </p>
+                <Upload embedded />
               </div>
             </DialogContent>
           </Dialog>

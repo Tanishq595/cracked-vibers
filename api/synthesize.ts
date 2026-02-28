@@ -148,6 +148,7 @@ export default async function handler(
       }
     }
 
+    console.log("[synthesize] done", { topicsCount: topics.length, hasGraph: !!knowledgeGraph });
     res.status(200).json({
       markdown: result,
       knowledgeGraph,

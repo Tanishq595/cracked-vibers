@@ -26,6 +26,7 @@ import oralSessionHandler from './api/oral-session'
 import ttsElevenHandler from './api/tts-eleven'
 import coachResponseHandler from './api/coach-response'
 import searchExaHandler from './api/search-exa'
+import searchLibraryHandler from './api/search-library'
 
 function readBody(nodeReq: Connect.IncomingMessage): Promise<Record<string, unknown> | null> {
   return new Promise((resolve, reject) => {
@@ -70,6 +71,7 @@ const API_HANDLERS: Record<string, (req: Connect.IncomingMessage, res: Connect.S
   '/api/tts-eleven': runVercelHandlerWithBody(ttsElevenHandler),
   '/api/coach-response': runVercelHandlerWithBody(coachResponseHandler),
   '/api/search-exa': runVercelHandlerWithBody(searchExaHandler),
+  '/api/search-library': runVercelHandlerWithBody(searchLibraryHandler),
 }
 
 type VercelReq = {
