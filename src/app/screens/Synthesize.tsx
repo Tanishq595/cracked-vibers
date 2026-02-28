@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useUser } from "@clerk/clerk-react";
 import ReactMarkdown from "react-markdown";
 import { useLocation, useNavigate } from "react-router";
@@ -30,7 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { FileText, Loader2, BookOpen, Layers, ChevronLeft, ChevronRight, Check, X, Video } from "lucide-react";
+import { FileText, Folder, Loader2, BookOpen, Layers, ChevronLeft, ChevronRight, Check, X, Video } from "lucide-react";
 
 const STORAGE_KEY_PREFIX = "mustlearn_qsets_";
 
@@ -219,6 +219,27 @@ type LibraryItem = {
   lastModified: string | null;
 };
 
+const FOLDER_STORAGE_KEY = "mustlearn_library_folders_";
+type LibraryFolder = { id: string; name: string };
+type FolderState = { folders: LibraryFolder[]; fileToFolder: Record<string, string> };
+
+function loadFolderState(userId: string): FolderState {
+  try {
+    const raw = localStorage.getItem(FOLDER_STORAGE_KEY + userId);
+    if (!raw) return { folders: [], fileToFolder: {} };
+    const parsed = JSON.parse(raw) as FolderState;
+    return {
+      folders: Array.isArray(parsed.folders) ? parsed.folders : [],
+      fileToFolder:
+        parsed.fileToFolder && typeof parsed.fileToFolder === "object"
+          ? parsed.fileToFolder
+          : {},
+    };
+  } catch {
+    return { folders: [], fileToFolder: {} };
+  }
+}
+
 export function Synthesize() {
   const { user } = useUser();
   const [materials, setMaterials] = useState("");
@@ -246,6 +267,8 @@ export function Synthesize() {
   const [libraryError, setLibraryError] = useState<string | null>(null);
   const [librarySelectedKeys, setLibrarySelectedKeys] = useState<string[]>([]);
   const [libraryAdding, setLibraryAdding] = useState(false);
+  const [libraryFolders, setLibraryFolders] = useState<LibraryFolder[]>([]);
+  const [libraryFileToFolder, setLibraryFileToFolder] = useState<Record<string, string>>({});
 
   const [currentSet, setCurrentSet] = useState<QuestionSet | null>(null);
   const [savedSets, setSavedSets] = useState<QuestionSet[]>([]);
@@ -265,6 +288,9 @@ export function Synthesize() {
     if (!user?.id) return;
     void loadHistory(user.id);
     setSavedSets(loadSavedSets(user.id));
+    const folderState = loadFolderState(user.id);
+    setLibraryFolders(folderState.folders);
+    setLibraryFileToFolder(folderState.fileToFolder);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
@@ -588,6 +614,9 @@ export function Synthesize() {
       setLibrarySelectedKeys((prev) =>
         prev.filter((k) => items.some((it) => it.key === k))
       );
+      const folderState = loadFolderState(user.id);
+      setLibraryFolders(folderState.folders);
+      setLibraryFileToFolder(folderState.fileToFolder);
     } catch (e) {
       setLibraryError(
         e instanceof Error ? e.message : "Failed to load library files"
@@ -602,6 +631,19 @@ export function Synthesize() {
       prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
     );
   }
+
+  const libraryItemsByFolder = useMemo(() => {
+    const uncategorized: LibraryItem[] = [];
+    const byFolder: Record<string, LibraryItem[]> = {};
+    for (const f of libraryFolders) byFolder[f.id] = [];
+    for (const item of libraryItems) {
+      const folderId = libraryFileToFolder[item.key];
+      if (!folderId) uncategorized.push(item);
+      else if (byFolder[folderId]) byFolder[folderId].push(item);
+      else uncategorized.push(item);
+    }
+    return { uncategorized, byFolder };
+  }, [libraryItems, libraryFolders, libraryFileToFolder]);
 
   const filteredQuestions = currentSet
     ? currentSet.questions.filter((q) => {
@@ -666,34 +708,84 @@ export function Synthesize() {
                     </p>
                   )}
                   {!libraryLoading && libraryItems.length > 0 && (
-                    <ul className="max-h-64 space-y-2 overflow-auto text-sm">
-                      {libraryItems.map((item) => {
-                        const name = item.key.split("/").pop() || item.key;
-                        const last =
-                          item.lastModified &&
-                          !Number.isNaN(Date.parse(item.lastModified))
-                            ? new Date(item.lastModified).toLocaleString()
-                            : "Unknown";
+                    <div className="max-h-64 space-y-4 overflow-auto text-sm">
+                      {libraryItemsByFolder.uncategorized.length > 0 && (
+                        <section>
+                          <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            <Folder className="w-4 h-4" />
+                            Uncategorized
+                          </h3>
+                          <ul className="space-y-2">
+                            {libraryItemsByFolder.uncategorized.map((item) => {
+                              const name = item.key.split("/").pop() || item.key;
+                              const last =
+                                item.lastModified &&
+                                !Number.isNaN(Date.parse(item.lastModified))
+                                  ? new Date(item.lastModified).toLocaleString()
+                                  : "Unknown";
+                              return (
+                                <li
+                                  key={item.key}
+                                  className="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 hover:border-[#ffb347] hover:bg-[#ffb347]/5 dark:border-slate-700"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={librarySelectedKeys.includes(item.key)}
+                                    onChange={() => toggleLibrarySelected(item.key)}
+                                    className="h-4 w-4 rounded border-slate-300 text-[#ffb347] focus:ring-[#ffb347]"
+                                  />
+                                  <FileText className="w-4 h-4 text-slate-500 shrink-0" />
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate font-medium text-foreground">{name}</p>
+                                    <p className="truncate text-[11px] text-zinc-500">{last}</p>
+                                  </div>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </section>
+                      )}
+                      {libraryFolders.map((folder) => {
+                        const items = libraryItemsByFolder.byFolder[folder.id] ?? [];
+                        if (items.length === 0) return null;
                         return (
-                          <li
-                            key={item.key}
-                            className="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 hover:border-[#ffb347] hover:bg-[#ffb347]/5 dark:border-slate-700"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={librarySelectedKeys.includes(item.key)}
-                              onChange={() => toggleLibrarySelected(item.key)}
-                              className="h-4 w-4 rounded border-slate-300 text-[#ffb347] focus:ring-[#ffb347]"
-                            />
-                            <FileText className="w-4 h-4 text-slate-500 shrink-0" />
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate font-medium text-foreground">{name}</p>
-                              <p className="truncate text-[11px] text-zinc-500">{last}</p>
-                            </div>
-                          </li>
+                          <section key={folder.id}>
+                            <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                              <Folder className="w-4 h-4" />
+                              {folder.name}
+                            </h3>
+                            <ul className="space-y-2">
+                              {items.map((item) => {
+                                const name = item.key.split("/").pop() || item.key;
+                                const last =
+                                  item.lastModified &&
+                                  !Number.isNaN(Date.parse(item.lastModified))
+                                    ? new Date(item.lastModified).toLocaleString()
+                                    : "Unknown";
+                                return (
+                                  <li
+                                    key={item.key}
+                                    className="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 hover:border-[#ffb347] hover:bg-[#ffb347]/5 dark:border-slate-700"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={librarySelectedKeys.includes(item.key)}
+                                      onChange={() => toggleLibrarySelected(item.key)}
+                                      className="h-4 w-4 rounded border-slate-300 text-[#ffb347] focus:ring-[#ffb347]"
+                                    />
+                                    <FileText className="w-4 h-4 text-slate-500 shrink-0" />
+                                    <div className="min-w-0 flex-1">
+                                      <p className="truncate font-medium text-foreground">{name}</p>
+                                      <p className="truncate text-[11px] text-zinc-500">{last}</p>
+                                    </div>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </section>
                         );
                       })}
-                    </ul>
+                    </div>
                   )}
                 </div>
               </DialogContent>

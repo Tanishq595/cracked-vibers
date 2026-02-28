@@ -1,12 +1,11 @@
 import { createElement } from "react";
-import { createBrowserRouter } from "react-router";
+import { createBrowserRouter, redirect } from "react-router";
 import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { RootLayout } from "./components/RootLayout";
 import { ErrorPage } from "./components/ErrorPage";
 import { Dashboard } from "./screens/Dashboard";
 import { Synthesize } from "./screens/Synthesize";
-import { Upload } from "./screens/Upload";
 import { Library } from "./screens/Library";
 import { SpeakingCoachScreen } from "./screens/SpeakingCoach";
 import { Search } from "./screens/Search";
@@ -50,7 +49,7 @@ export const router = createBrowserRouter([
             children: [
               { index: true, Component: Dashboard },
               { path: "synthesize", Component: Synthesize },
-              { path: "upload", Component: Upload },
+              { path: "upload", loader: () => redirect("/dashboard/library") },
               { path: "library", Component: Library },
               { path: "coach", Component: SpeakingCoachScreen },
               { path: "search", Component: Search },

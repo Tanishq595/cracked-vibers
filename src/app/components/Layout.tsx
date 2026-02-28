@@ -15,7 +15,6 @@ import {
   Menu,
   X,
   LogOut,
-  Upload,
   FolderOpen,
   Mic
 } from 'lucide-react';
@@ -25,7 +24,6 @@ const navItems = [
   { path: '/dashboard', label: 'Home', icon: LayoutDashboard },
   { path: '/dashboard/synthesize', label: 'Synthesize', icon: Sparkles },
   { path: '/dashboard/library', label: 'Library', icon: FolderOpen },
-  { path: '/dashboard/upload', label: 'Upload', icon: Upload },
   { path: '/dashboard/coach', label: 'Speaking coach', icon: Mic },
   { path: '/dashboard/search', label: 'Search', icon: Search },
   { path: '/dashboard/knowledge-graph', label: 'Graph', icon: Network },
