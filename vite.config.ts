@@ -33,6 +33,11 @@ import chatMessagesHandler from './api/chat-messages'
 import youtubeAuthHandler from './api/youtube-auth'
 import youtubeCallbackHandler from './api/youtube-callback'
 import youtubeWatchHistoryHandler from './api/youtube-watch-history'
+import canvasFetchHandler from './api/canvas-fetch'
+import canvasAuthUrlHandler from './api/canvas-auth-url'
+import canvasCallbackHandler from './api/canvas-callback'
+import googleClassroomAuthHandler from './api/google-classroom-auth'
+import googleClassroomAuthCallbackHandler from './api/google-classroom-auth-callback'
 
 function readBody(nodeReq: Connect.IncomingMessage): Promise<Record<string, unknown> | null> {
   return new Promise((resolve, reject) => {
@@ -44,8 +49,16 @@ function readBody(nodeReq: Connect.IncomingMessage): Promise<Record<string, unkn
         resolve(null)
         return
       }
+      const contentType = (nodeReq.headers['content-type'] ?? '') as string
       try {
-        resolve(JSON.parse(raw) as Record<string, unknown>)
+        if (contentType.includes('application/x-www-form-urlencoded')) {
+          const params = new URLSearchParams(raw)
+          const out: Record<string, unknown> = {}
+          params.forEach((v, k) => { out[k] = v })
+          resolve(out)
+        } else {
+          resolve(JSON.parse(raw) as Record<string, unknown>)
+        }
       } catch {
         resolve(null)
       }
@@ -80,9 +93,14 @@ const API_HANDLERS: Record<string, (req: Connect.IncomingMessage, res: Connect.S
   '/api/search-library': runVercelHandlerWithBody(searchLibraryHandler),
   '/api/search-youtube': runVercelHandlerWithBody(searchYoutubeHandler),
   '/api/chat-messages': runVercelHandlerWithBody(chatMessagesHandler),
-  '/api/youtube-auth': runVercelHandlerWithQuery(youtubeAuthHandler),
-  '/api/youtube-callback': runVercelHandlerWithQuery(youtubeCallbackHandler),
+  '/api/youtube-auth': runVercelHandlerGet(youtubeAuthHandler),
+  '/api/youtube-callback': runVercelHandlerGet(youtubeCallbackHandler),
   '/api/youtube-watch-history': runVercelHandlerWithBody(youtubeWatchHistoryHandler),
+  '/api/canvas/fetch': runVercelHandlerGet(canvasFetchHandler),
+  '/api/canvas/auth-url': runVercelHandlerWithBody(canvasAuthUrlHandler),
+  '/api/canvas/callback': runVercelHandlerGetWithRedirect(canvasCallbackHandler),
+  '/api/google-classroom-auth': runVercelHandlerGetWithRedirect(googleClassroomAuthHandler),
+  '/api/google-classroom-auth/callback': runVercelHandlerGetWithRedirect(googleClassroomAuthCallbackHandler),
 }
 
 type VercelReq = {
@@ -117,58 +135,20 @@ function runVercelHandler(handler: (req: VercelReq, res: VercelRes) => Promise<v
   }
 }
 
-function parseQuery(nodeReq: Connect.IncomingMessage): Record<string, string | string[]> {
-  const url = nodeReq.url ?? ''
-  const q = url.includes('?') ? url.split('?')[1] : ''
-  const query: Record<string, string | string[]> = {}
-  if (q) {
-    for (const part of q.split('&')) {
-      const [k, v] = part.split('=')
-      if (k) query[decodeURIComponent(k)] = v ? decodeURIComponent(v) : ''
-    }
-  }
-  return query
-}
-
-function runVercelHandlerWithQuery(handler: (req: VercelReq, res: VercelRes) => Promise<void>) {
+function runVercelHandlerGet(handler: (req: VercelReq, res: VercelRes) => Promise<void>) {
   return async (nodeReq: Connect.IncomingMessage, nodeRes: Connect.ServerResponse) => {
-    const query = parseQuery(nodeReq)
+    const url = nodeReq.url ?? ''
+    const q = url.includes('?') ? url.split('?')[1] : ''
+    const query: Record<string, string | string[]> = {}
+    if (q) {
+      for (const part of q.split('&')) {
+        const [k, v] = part.split('=')
+        if (k) query[decodeURIComponent(k)] = v ? decodeURIComponent(v) : ''
+      }
+    }
     const req: VercelReq = {
       method: nodeReq.method,
       headers: nodeReq.headers as Record<string, string | string[] | undefined>,
-      query,
-    }
-    const res: VercelRes = {
-      status(code: number) {
-        nodeRes.statusCode = code
-        return {
-          json(body: object) {
-            nodeRes.setHeader('Content-Type', 'application/json')
-            nodeRes.end(JSON.stringify(body))
-          },
-        }
-      },
-      redirect(code: number, url: string) {
-        nodeRes.statusCode = code
-        nodeRes.setHeader('Location', url)
-        nodeRes.end()
-      },
-    }
-    await handler(req, res)
-  }
-}
-
-function runVercelHandlerWithBody(handler: (req: VercelReq, res: VercelRes) => Promise<void>) {
-  return async (nodeReq: Connect.IncomingMessage, nodeRes: Connect.ServerResponse) => {
-    let body: Record<string, unknown> | null = null
-    if (nodeReq.method === 'POST' || nodeReq.method === 'PUT' || nodeReq.method === 'PATCH') {
-      body = await readBody(nodeReq)
-    }
-    const query = parseQuery(nodeReq)
-    const req: VercelReq = {
-      method: nodeReq.method,
-      headers: nodeReq.headers as Record<string, string | string[] | undefined>,
-      body: body ?? undefined,
       query,
     }
     const res: VercelRes = {
@@ -201,6 +181,99 @@ function copyPdfWorker() {
   }
 }
 
+function runVercelHandlerGetWithRedirect(
+  handler: (req: VercelReq, res: VercelRes & { redirect: (url: string) => void }) => Promise<void>
+) {
+  return async (nodeReq: Connect.IncomingMessage, nodeRes: Connect.ServerResponse) => {
+    const url = nodeReq.url ?? ''
+    const q = url.includes('?') ? url.split('?')[1] : ''
+    const query: Record<string, string | string[]> = {}
+    if (q) {
+      for (const part of q.split('&')) {
+        const [k, v] = part.split('=')
+        if (k) query[decodeURIComponent(k)] = v ? decodeURIComponent(v) : ''
+      }
+    }
+    const req: VercelReq = {
+      method: nodeReq.method,
+      headers: nodeReq.headers as Record<string, string | string[] | undefined>,
+      query,
+    }
+    const res: VercelRes & { redirect: (url: string) => void; setHeader?: (name: string, value: string | string[]) => void } = {
+      status(code: number) {
+        nodeRes.statusCode = code
+        return {
+          json(body: object) {
+            nodeRes.setHeader('Content-Type', 'application/json')
+            nodeRes.end(JSON.stringify(body))
+          },
+        }
+      },
+      setHeader(name: string, value: string | string[]) {
+        nodeRes.setHeader(name, value)
+      },
+      redirect(redirectUrl: string) {
+        nodeRes.statusCode = 302
+        nodeRes.setHeader('Location', redirectUrl)
+        nodeRes.end()
+      },
+    }
+    await handler(req, res)
+  }
+}
+
+function runVercelHandlerWithBody(handler: (req: VercelReq, res: VercelRes) => Promise<void>) {
+  return async (nodeReq: Connect.IncomingMessage, nodeRes: Connect.ServerResponse) => {
+    let body: Record<string, unknown> | null = null
+    if (nodeReq.method === 'POST' || nodeReq.method === 'PUT' || nodeReq.method === 'PATCH') {
+      body = await readBody(nodeReq)
+    }
+    const url = nodeReq.url ?? ''
+    const q = url.includes('?') ? url.split('?')[1] : ''
+    const query: Record<string, string | string[]> = {}
+    if (q) {
+      for (const part of q.split('&')) {
+        const [k, v] = part.split('=')
+        if (k) query[decodeURIComponent(k)] = v ? decodeURIComponent(v) : ''
+      }
+    }
+    // Preserve Authorization from rawHeaders (proxy or Node may lowercase/drop it)
+    const headers = { ...nodeReq.headers } as Record<string, string | string[] | undefined>
+    const raw = nodeReq.rawHeaders
+    if (raw && !headers.authorization && !headers.Authorization) {
+      for (let i = 0; i < raw.length - 1; i += 2) {
+        if (raw[i].toLowerCase() === 'authorization') {
+          headers.authorization = raw[i + 1]
+          break
+        }
+      }
+    }
+    const req: VercelReq = {
+      method: nodeReq.method,
+      headers,
+      body: body ?? undefined,
+      query,
+    }
+    const res: VercelRes & { redirect?: (url: string) => void } = {
+      status(code: number) {
+        nodeRes.statusCode = code
+        return {
+          json(body: object) {
+            nodeRes.setHeader('Content-Type', 'application/json')
+            nodeRes.end(JSON.stringify(body))
+          },
+        }
+      },
+      redirect(url: string) {
+        nodeRes.statusCode = 302
+        nodeRes.setHeader('Location', url)
+        nodeRes.end()
+      },
+    }
+    await handler(req, res)
+  }
+}
+
 export default defineConfig({
   plugins: [
     react(),
@@ -222,7 +295,7 @@ export default defineConfig({
           if (url === '/api/youtube-data') {
             try {
               const m = await import('./api/youtube-data')
-              const run = runVercelHandlerWithQuery(m.default)
+              const run = runVercelHandlerGet(m.default)
               await run(nodeReq, nodeRes)
             } catch (err) {
               console.error('[api-dev]', err)
@@ -254,12 +327,21 @@ export default defineConfig({
 
   server: {
     port: 3000,
-    proxy: {
-      '/api': {
-        target: process.env.VITE_API_URL || 'http://localhost:3000',
-        changeOrigin: true,
-      },
-    },
+    // Only proxy /api when VITE_API_URL is set (e.g. separate backend). Otherwise api-dev handles /api and keeps headers.
+    proxy: process.env.VITE_API_URL
+      ? {
+          '/api': {
+            target: process.env.VITE_API_URL,
+            changeOrigin: true,
+            configure(proxy) {
+              proxy.on('proxyReq', (proxyReq, req: Connect.IncomingMessage) => {
+                const h = req.headers?.authorization ?? req.headers?.Authorization
+                if (h) proxyReq.setHeader('Authorization', typeof h === 'string' ? h : h[0] ?? '')
+              })
+            },
+          },
+        }
+      : undefined,
   },
 
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.

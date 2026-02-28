@@ -25,12 +25,27 @@ export function Onboarding() {
 
   useEffect(() => {
     const youtube = searchParams.get('youtube');
+    const googleClassroom = searchParams.get('google_classroom');
+    const updates: string[] = [];
     if (youtube === 'connected') {
-      setConnected((prev) => (prev.includes('youtube') ? prev : [...prev, 'youtube']));
+      updates.push('youtube');
+    }
+    if (googleClassroom === 'connected') {
+      updates.push('classroom');
+    }
+    if (updates.length > 0) {
+      setConnected((prev) => {
+        const next = [...prev];
+        updates.forEach((p) => {
+          if (!next.includes(p)) next.push(p);
+        });
+        return next;
+      });
       setSearchParams((p) => {
         const next = new URLSearchParams(p);
         next.delete('youtube');
         next.delete('message');
+        next.delete('google_classroom');
         return next;
       }, { replace: true });
     }
@@ -54,6 +69,11 @@ export function Onboarding() {
       } catch {
         setConnecting(null);
       }
+      return;
+    }
+    if (platform === 'classroom') {
+      setConnecting('classroom');
+      window.location.href = `/api/google-classroom-auth?returnTo=${encodeURIComponent('/onboarding')}`;
       return;
     }
     setConnecting(platform);

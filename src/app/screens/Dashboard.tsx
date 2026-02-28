@@ -23,10 +23,17 @@ import {
 } from "lucide-react";
 import { useState, useEffect, Component, useCallback, type ReactNode } from "react";
 import { useAuth, useUser } from "@clerk/clerk-react";
+import { useNavigate, useSearchParams } from 'react-router';
 import { KnowledgeGraph } from "../components/KnowledgeGraph";
 import { ChatbotGLB } from "../components/ChatbotGLB";
-import { useNavigate } from "react-router";
 import { useTopGaps } from "./GapAnalysis";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
+import { Button } from '../components/ui/button';
 
 const CHAT_HISTORY_KEY = "mustlearn_chat_history_";
 const DEFAULT_GREETING = {
@@ -251,6 +258,129 @@ export function Dashboard() {
   useEffect(() => {
     if (messages.length > 0) saveChatHistory(userId, messages);
   }, [messages, userId]);
+
+  // Canvas connect state
+  const [canvasOpen, setCanvasOpen] = useState(false);
+  const [canvasCourses, setCanvasCourses] = useState<{ id: number; name: string; course_code?: string }[]>([]);
+  const [canvasSelectedCourseId, setCanvasSelectedCourseId] = useState<string | null>(null);
+  const [canvasAssignments, setCanvasAssignments] = useState<{ id: number; name: string; description?: string; due_at?: string; points_possible?: number }[]>([]);
+  const [canvasLoading, setCanvasLoading] = useState(false);
+  const [canvasError, setCanvasError] = useState<string | null>(null);
+  const [canvasSynthesis, setCanvasSynthesis] = useState<string | null>(null);
+  const [canvasAuthLoading, setCanvasAuthLoading] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Clear ?canvas=connected or ?canvas=error from URL after showing once
+  useEffect(() => {
+    const canvasParam = searchParams.get('canvas');
+    if (canvasParam === 'connected' || canvasParam === 'error') {
+      const next = new URLSearchParams(searchParams);
+      next.delete('canvas');
+      next.delete('message');
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  const handleSignInWithCanvas = async () => {
+    setCanvasAuthLoading(true);
+    setCanvasError(null);
+    try {
+      const token = await getToken({ skipCache: true });
+      if (!token) {
+        setCanvasError('Please sign in first, then connect Canvas.');
+        setCanvasAuthLoading(false);
+        return;
+      }
+      // Form POST avoids fetch/auth-header issues: server gets token from body and redirects to Canvas
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = '/api/canvas/auth-url';
+      form.style.display = 'none';
+      const input = document.createElement('input');
+      input.name = 'token';
+      input.value = token;
+      input.type = 'hidden';
+      form.appendChild(input);
+      document.body.appendChild(form);
+      form.submit();
+    } catch (err) {
+      setCanvasError(err instanceof Error ? err.message : 'Failed to connect to Canvas');
+      setCanvasAuthLoading(false);
+    }
+  };
+
+  const fetchCanvasCourses = async () => {
+    setCanvasLoading(true);
+    setCanvasError(null);
+    try {
+      const token = await getToken();
+      const res = await fetch('/api/canvas/fetch?type=courses', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error ?? 'Failed to fetch courses');
+      setCanvasCourses(Array.isArray(json.data) ? json.data : []);
+    } catch (err) {
+      setCanvasError(
+        err instanceof Error ? err.message : 'Canvas connection failed. Sign in with Canvas first.'
+      );
+    } finally {
+      setCanvasLoading(false);
+    }
+  };
+
+  const fetchCanvasAssignments = async (courseId: string) => {
+    setCanvasLoading(true);
+    setCanvasError(null);
+    try {
+      const token = await getToken();
+      const res = await fetch(`/api/canvas/fetch?type=assignments&courseId=${courseId}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error ?? 'Failed to fetch assignments');
+      setCanvasAssignments(Array.isArray(json.data) ? json.data : []);
+      setCanvasSelectedCourseId(courseId);
+    } catch (err) {
+      setCanvasError(err instanceof Error ? err.message : 'Failed to fetch assignments');
+    } finally {
+      setCanvasLoading(false);
+    }
+  };
+
+  const handleSynthesizeWithCanvas = async () => {
+    if (!canvasSelectedCourseId || canvasAssignments.length === 0) {
+      setCanvasError('Select a course and load assignments first');
+      return;
+    }
+    setCanvasLoading(true);
+    setCanvasError(null);
+    setCanvasSynthesis(null);
+    try {
+      const canvasText = canvasAssignments
+        .map(
+          (a) =>
+            `Assignment: ${a.name}\n` +
+            `Description: ${(a.description ?? '').replace(/<[^>]+>/g, '') || 'No description'}\n` +
+            `Due: ${a.due_at ?? 'No due date'}\n` +
+            `Points: ${a.points_possible ?? 'N/A'}`
+        )
+        .join('\n\n');
+      const fullMaterials = `Canvas course data:\n${canvasText}`;
+      const synthRes = await fetch('/api/synthesize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ materials: fullMaterials }),
+      });
+      if (!synthRes.ok) throw new Error('Synthesis failed');
+      const synthJson = await synthRes.json();
+      setCanvasSynthesis(synthJson.markdown ?? synthJson.result ?? '');
+    } catch (err) {
+      setCanvasError(err instanceof Error ? err.message : 'Failed to synthesize');
+    } finally {
+      setCanvasLoading(false);
+    }
+  };
 
   const handleSendMessage = useCallback(async () => {
     if (!inputText.trim() || chatLoading) return;
@@ -485,6 +615,7 @@ export function Dashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {platforms.map((platform, index) => {
             const Icon = platform.icon;
+            const isCanvas = platform.name === 'Canvas';
             return (
               <motion.div
                 key={platform.name}
@@ -495,8 +626,12 @@ export function Dashboard() {
                 whileTap={{ scale: 0.98 }}
                 onClick={() => {
                   if (platform.path) navigate(platform.path);
+                  else if (isCanvas) setCanvasOpen(true);
                 }}
                 className={`relative overflow-hidden rounded-2xl bg-card border-2 ${platform.borderColor} p-6 cursor-pointer group hover:shadow-lg hover:shadow-black/20 transition-all`}
+                role={isCanvas ? 'button' : undefined}
+                tabIndex={isCanvas ? 0 : undefined}
+                onKeyDown={isCanvas ? (e) => e.key === 'Enter' && setCanvasOpen(true) : undefined}
               >
                 <div className={`absolute top-0 right-0 w-32 h-32 ${platform.bgColor} rounded-full blur-3xl opacity-50 group-hover:opacity-100 transition-opacity`} />
                 
@@ -810,6 +945,89 @@ export function Dashboard() {
           <p className="text-sm text-muted-foreground mt-2">Your AI learning companion is always here to help 🧡</p>
         </div>
       </motion.div>
+
+      {/* Canvas Connect Dialog */}
+      <Dialog open={canvasOpen} onOpenChange={setCanvasOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Connect Canvas</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Sign in with your Canvas account so we can access your courses and documents. After connecting, you can load courses and synthesize them with AI.
+            </p>
+            <Button
+              onClick={handleSignInWithCanvas}
+              disabled={canvasAuthLoading}
+              className="bg-[#E13F2F] hover:bg-[#c23528] w-full sm:w-auto"
+            >
+              {canvasAuthLoading ? 'Redirecting...' : 'Sign in with Canvas'}
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Already connected? Load your courses below.
+            </p>
+            <Button
+              variant="outline"
+              onClick={fetchCanvasCourses}
+              disabled={canvasLoading || canvasCourses.length > 0}
+              className="border-[#E13F2F]/50 text-[#E13F2F] hover:bg-[#E13F2F]/10"
+            >
+              {canvasLoading && !canvasCourses.length ? 'Loading...' : 'Load My Canvas Courses'}
+            </Button>
+            {canvasError && (
+              <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+                {canvasError}
+              </p>
+            )}
+            {canvasCourses.length > 0 && (
+              <div className="grid gap-2 md:grid-cols-2">
+                {canvasCourses.map((course) => (
+                  <button
+                    key={course.id}
+                    type="button"
+                    onClick={() => fetchCanvasAssignments(String(course.id))}
+                    className={`rounded-lg border-2 p-4 text-left transition ${
+                      canvasSelectedCourseId === String(course.id)
+                        ? 'border-[#E13F2F] bg-[#E13F2F]/10'
+                        : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <h4 className="font-semibold text-foreground">{course.name}</h4>
+                    <p className="text-xs text-muted-foreground">{course.course_code ?? 'No code'}</p>
+                  </button>
+                ))}
+              </div>
+            )}
+            {canvasSelectedCourseId && canvasAssignments.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-medium text-foreground">Assignments in selected course</h4>
+                <Button
+                  onClick={handleSynthesizeWithCanvas}
+                  disabled={canvasLoading}
+                  className="bg-emerald-600 hover:bg-emerald-700"
+                >
+                  {canvasLoading ? 'Synthesizing...' : 'Synthesize This Course with AI'}
+                </Button>
+              </div>
+            )}
+            {canvasSynthesis && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 dark:bg-slate-900 p-4">
+                <h4 className="font-medium text-foreground mb-2">AI Synthesis Result</h4>
+                <pre className="whitespace-pre-wrap text-sm text-foreground overflow-x-auto max-h-60 overflow-y-auto">
+                  {canvasSynthesis}
+                </pre>
+                <Button
+                  variant="outline"
+                  className="mt-3"
+                  onClick={() => navigate('/dashboard/synthesize')}
+                >
+                  Open in Synthesize
+                </Button>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* AI Chatbot Modal */}
       <AnimatePresence>
