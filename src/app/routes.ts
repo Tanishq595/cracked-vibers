@@ -5,6 +5,7 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { RootLayout } from "./components/RootLayout";
 import { ErrorPage } from "./components/ErrorPage";
 import { Dashboard } from "./screens/Dashboard";
+import { Synthesize } from "./screens/Synthesize";
 import { Search } from "./screens/Search";
 import { KnowledgeGraph } from "./screens/KnowledgeGraph";
 import { GapAnalysis } from "./screens/GapAnalysis";
@@ -25,15 +26,11 @@ export const router = createBrowserRouter([
         loader: () => redirect("/login"),
       },
       {
-        path: "login/*",
+        path: "login",
         Component: Login,
       },
       {
-        path: "sign-in/*",
-        Component: Login,
-      },
-      {
-        path: "signup/*",
+        path: "signup",
         Component: SignUp,
       },
       {
@@ -48,6 +45,7 @@ export const router = createBrowserRouter([
             Component: Layout,
             children: [
               { index: true, Component: Dashboard },
+              { path: "synthesize", Component: Synthesize },
               { path: "search", Component: Search },
               { path: "knowledge-graph", Component: KnowledgeGraph },
               { path: "gaps", Component: GapAnalysis },
