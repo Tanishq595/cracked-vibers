@@ -624,29 +624,7 @@ export function Dashboard() {
                 <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl" />
                 <div className="relative flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <motion.div
-                      animate={{
-                        scale: [1, 1.1, 1]
-                      }}
-                      transition={{
-                        duration: 2,
-                        repeat: Infinity,
-                        ease: "easeInOut"
-                      }}
-                      className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center drop-shadow-xl overflow-hidden"
-                    >
-                      {avatarExists === false ? (
-                        <Brain className="w-8 h-8 text-white" />
-                      ) : avatarExists === null ? (
-                        <div className="w-8 h-8 rounded-full bg-white/30 animate-pulse" />
-                      ) : (
-                        <img src="/chatbot/avatar.png" alt="AI avatar" className="w-full h-full object-cover" />
-                      )}
-                    </motion.div>
-                    <div>
-                      <h3 className="text-xl font-bold text-white">M.U.S.T.Learn AI</h3>
-                      <p className="text-sm text-white/80">Your personal learning assistant</p>
-                    </div>
+                    <span className="text-xl font-bold text-white">AI assistant</span>
                   </div>
                   <motion.button
                     whileHover={{ scale: 1.1, rotate: 90 }}
