@@ -61,8 +61,8 @@ export function Landing() {
       </div>
 
       {/* Top Bar */}
-      <header className="sticky top-0 z-20 w-full px-4 pt-4 pb-4">
-        <div className="flex items-center justify-between max-w-6xl mx-auto px-4 md:px-8 py-4 bg-white rounded-3xl border border-slate-200/60 shadow-sm">
+      <header className="sticky top-0 z-20 w-full px-2 sm:px-4 pt-3 sm:pt-4 pb-3 sm:pb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 sm:gap-6 max-w-6xl mx-auto px-3 sm:px-4 md:px-8 py-3 sm:py-4 bg-white rounded-3xl border border-slate-200/60 shadow-sm">
           <img
             src="/company_logo/logo.png"
             alt="M.U.S.T.Learn"
@@ -101,7 +101,7 @@ export function Landing() {
           </nav>
           <Link
             to="/login"
-            className="rounded-xl bg-gradient-to-r from-[#ffb347] to-[#ff8c42] px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-orange-200/50 transition-all hover:shadow-lg hover:scale-105 active:scale-100"
+            className="rounded-xl bg-gradient-to-r from-[#ffb347] to-[#ff8c42] px-4 sm:px-5 py-2 text-xs sm:text-sm font-bold text-white shadow-md shadow-orange-200/50 transition-all hover:shadow-lg hover:scale-105 active:scale-100 whitespace-nowrap"
           >
             Try now
           </Link>
@@ -109,16 +109,16 @@ export function Landing() {
       </header>
 
       {/* Content area */}
-      <div className="flex-1 flex flex-col items-center px-6 py-12 relative overflow-hidden">
-        <div className="flex-1 flex flex-col items-center relative z-10 w-full">
+      <div className="flex-1 flex flex-col items-center px-4 sm:px-6 py-10 sm:py-12 relative overflow-hidden w-full">
+        <div className="flex-1 flex flex-col items-center relative z-10 w-full max-w-6xl mx-auto">
         {/* Hero Section */}
-        <section id="hero" className="flex flex-col items-center justify-center min-h-[70vh] max-w-4xl mx-auto scroll-mt-20">
+        <section id="hero" className="flex flex-col items-center justify-center min-h-[70vh] w-full max-w-4xl mx-auto px-2 sm:px-4 md:px-0 scroll-mt-24">
           {/* 3D Bear Model */}
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.6 }}
-            className="w-full max-w-md h-80 md:h-96 mb-6"
+            className="w-full max-w-xs sm:max-w-md h-64 sm:h-80 md:h-96 mb-6"
           >
             <ChatbotGLB
               url="/bot/Bear.glb"
@@ -133,21 +133,21 @@ export function Landing() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.2 }}
-            className="flex flex-col items-center text-center"
+            className="flex flex-col items-center text-center px-2 sm:px-4"
           >
-            <h1 className="text-2xl md:text-3xl font-bold text-slate-800 mb-4">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-800 mb-4">
               Your brain's second memory—organized & traceable
             </h1>
-            <p className="text-lg md:text-xl text-slate-600 font-medium mb-4 max-w-2xl">
+            <p className="text-base sm:text-lg md:text-xl text-slate-600 font-medium mb-4 max-w-2xl">
               AI-powered learning: synthesize materials, find gaps, and get a study plan.
             </p>
-            <p className="text-slate-500 mb-8 max-w-xl">
+            <p className="text-sm sm:text-base text-slate-500 mb-8 max-w-xl">
               M.U.S.T.Learn helps you focus your time on what matters.
             </p>
 
             <Link
               to="/login"
-              className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-[#ffb347] to-[#ff8c42] px-8 py-4 text-lg font-bold text-white shadow-lg shadow-orange-200/50 transition-all hover:shadow-xl hover:shadow-orange-300/50 hover:scale-105 active:scale-100"
+              className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-[#ffb347] to-[#ff8c42] px-6 sm:px-8 py-3 sm:py-4 text-base sm:text-lg font-bold text-white shadow-lg shadow-orange-200/50 transition-all hover:shadow-xl hover:shadow-orange-300/50 hover:scale-105 active:scale-100"
             >
               Try now
               <ArrowRight className="w-5 h-5" />
@@ -156,7 +156,7 @@ export function Landing() {
         </section>
 
         {/* Features Section */}
-        <section id="features" className="w-full max-w-5xl mx-auto mt-20 mb-20 scroll-mt-20">
+        <section id="features" className="w-full max-w-5xl mx-auto mt-16 sm:mt-20 mb-16 sm:mb-20 scroll-mt-24">
           <motion.h2
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -175,7 +175,7 @@ export function Landing() {
             From upload to execution, AI guides the whole journey—learn faster and remember better.
           </motion.p>
 
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
             {features.map(({ icon: Icon, title, description }, i) => (
               <motion.div
                 key={title}
@@ -183,7 +183,7 @@ export function Landing() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: 0.1 * i }}
-                className="group h-56 [perspective:1000px] cursor-pointer"
+                className="group h-64 sm:h-56 [perspective:1000px] cursor-pointer"
                 onClick={() => setFlipped(flipped === i ? null : i)}
               >
                 <div
@@ -213,7 +213,7 @@ export function Landing() {
         </section>
 
         {/* How it Works */}
-        <section id="how-it-works" className="w-full max-w-4xl mx-auto mb-20 scroll-mt-20">
+        <section id="how-it-works" className="w-full max-w-4xl mx-auto mb-16 sm:mb-20 scroll-mt-24">
           <motion.h2
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -236,7 +236,7 @@ export function Landing() {
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="flex flex-wrap justify-center gap-4 md:gap-8"
+            className="flex flex-wrap justify-center gap-4 sm:gap-6 md:gap-8"
           >
             {steps.map(({ icon: Icon, label }, i) => (
               <div key={label} className="flex items-center gap-2">
@@ -257,7 +257,7 @@ export function Landing() {
         </section>
 
         {/* Benefits / Value Props */}
-        <section id="why-choose" className="w-full max-w-3xl mx-auto mb-20 scroll-mt-20">
+        <section id="why-choose" className="w-full max-w-3xl mx-auto mb-16 sm:mb-20 scroll-mt-24">
           <motion.h2
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -270,7 +270,7 @@ export function Landing() {
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="space-y-4"
+            className="space-y-3 sm:space-y-4"
           >
             {[
               'Save time organizing—focus your energy on understanding and retaining',
@@ -287,14 +287,14 @@ export function Landing() {
         </section>
 
         {/* Footer */}
-        <footer id="footer" className="w-full max-w-6xl mx-auto scroll-mt-20">
+        <footer id="footer" className="w-full max-w-6xl mx-auto scroll-mt-24 px-2 sm:px-0">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="p-8 md:p-12 rounded-3xl bg-white/90 backdrop-blur-sm border border-slate-200/60 shadow-lg"
+            className="p-6 sm:p-8 md:p-12 rounded-3xl bg-white/90 backdrop-blur-sm border border-slate-200/60 shadow-lg"
           >
-            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-10">
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-8 md:gap-10">
               <div className="space-y-4 max-w-sm">
                 <img
                   src="/company_logo/logo.png"
@@ -307,7 +307,7 @@ export function Landing() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-10">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 md:gap-10">
                 <div className="space-y-3">
                   <div className="text-sm font-bold text-slate-800">Product</div>
                   <div className="flex flex-col gap-2">
