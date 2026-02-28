@@ -1,10 +1,25 @@
 'use client';
 
 import { Suspense, useRef, useLayoutEffect, useState, useEffect } from 'react';
-import { Canvas } from '@react-three/fiber';
-import { useGLTF, OrbitControls } from '@react-three/drei';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { useGLTF } from '@react-three/drei';
 import type { Group } from 'three';
 import * as THREE from 'three';
+
+/** Forces canvas to re-render on mount - fixes blank canvas until scroll issue */
+function InvalidateOnMount() {
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => {
+    invalidate();
+    const t1 = requestAnimationFrame(() => invalidate());
+    const t2 = setTimeout(invalidate, 150);
+    return () => {
+      cancelAnimationFrame(t1);
+      clearTimeout(t2);
+    };
+  }, [invalidate]);
+  return null;
+}
 
 interface GLBModelProps {
   url?: string;
@@ -27,6 +42,17 @@ function Model({ url, scale = 1 }: { url: string; scale?: number }) {
     // Reduce automatic fit scale so models appear a bit smaller by default.
     scene.scale.multiplyScalar(1.2 / maxDim);
   }, [scene]);
+
+  // Subtle mouse-follow: character tilts a bit toward cursor (like heilcheng/website)
+  // No 360° rotation – only a small, smooth movement
+  useFrame((state) => {
+    if (group.current) {
+      const targetRotY = state.mouse.x * 0.5;
+      const targetRotX = -state.mouse.y * 0.5;
+      group.current.rotation.y = THREE.MathUtils.lerp(group.current.rotation.y, targetRotY, 0.1);
+      group.current.rotation.x = THREE.MathUtils.lerp(group.current.rotation.x, targetRotX, 0.1);
+    }
+  });
 
   return (
     <group ref={group} scale={scale}>
@@ -109,7 +135,14 @@ export function ChatbotGLB({
           </div>
         </div>
       ) : (
-        <Canvas camera={{ position: [0, 0, 3], fov: 45 }} gl={{ antialias: true, alpha: true }}>
+        <Canvas
+          camera={{ position: [0, 0, 3], fov: 45 }}
+          gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}
+          frameloop="always"
+          resize={{ debounce: 0, scroll: true }}
+          style={{ display: 'block' }}
+        >
+          <InvalidateOnMount />
           <ambientLight intensity={1} />
           <directionalLight position={[5, 5, 5]} intensity={1.5} />
           <directionalLight position={[-5, -5, 5]} intensity={0.5} />
@@ -122,7 +155,6 @@ export function ChatbotGLB({
             }
           >
             <Model url={url} scale={scale} />
-            <OrbitControls enableZoom={false} enablePan={false} autoRotate autoRotateSpeed={2} />
           </Suspense>
         </Canvas>
       )}

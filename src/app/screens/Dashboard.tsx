@@ -173,9 +173,11 @@ class GLBErrorBoundary extends Component<
 export function Dashboard() {
   const [searchFocused, setSearchFocused] = useState(false);
   const [showAI, setShowAI] = useState(true);
+  const [mascotReady, setMascotReady] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [avatarExists, setAvatarExists] = useState<boolean | null>(null);
   const [inputText, setInputText] = useState('');
+  const [inputFocused, setInputFocused] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
   const [messages, setMessages] = useState([
     {
@@ -293,18 +295,24 @@ export function Dashboard() {
               damping: 20,
               delay: 0.2 
             }}
+            onAnimationComplete={() => setMascotReady(true)}
             whileHover={{ 
               scale: 1.05,
               transition: { duration: 0.3 }
             }}
-            className="relative cursor-pointer"
-            onClick={() => setChatOpen(true)}
+            className="relative"
           >
             {/* 3D chatbot mascot – model at public/bot/bear.glb */}
             <div className="relative w-80 h-80 md:w-[500px] md:h-[500px] flex items-center justify-center overflow-hidden">
               <GLBErrorBoundary fallback={<Brain className="w-32 h-32 md:w-48 md:h-48 text-white/90" />}>
                 <div className="absolute inset-0 w-full h-full">
-                  <ChatbotGLB url="/bot/bear.glb" scale={1.2} className="w-full h-full" />
+                  {mascotReady ? (
+                    <ChatbotGLB url="/bot/bear.glb" scale={1.2} className="w-full h-full" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Brain className="w-24 h-24 md:w-32 md:h-32 text-white/50 animate-pulse" />
+                    </div>
+                  )}
                 </div>
               </GLBErrorBoundary>
             </div>
@@ -649,9 +657,10 @@ export function Dashboard() {
                 ))}
               </div>
 
-              {/* Quick Action Buttons */}
-              <div className="px-6 pb-3">
-                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+              {/* Quick Action Buttons - hidden when typing */}
+              {!inputFocused && !inputText.trim() && (
+                <div className="px-6 pb-3">
+                  <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                   <button 
                     onClick={() => {
                       setInputText("Create a study plan for this week");
@@ -686,6 +695,7 @@ export function Dashboard() {
                   </button>
                 </div>
               </div>
+            )}
 
               {/* Chat Input */}
               <div className="p-6 pt-3 border-t border-slate-200 bg-slate-50/50">
@@ -694,6 +704,8 @@ export function Dashboard() {
                     type="text"
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
+                    onFocus={() => setInputFocused(true)}
+                    onBlur={() => setInputFocused(false)}
                     onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                     placeholder="Ask me anything about your learning..."
                     className="flex-1 px-4 py-3 bg-white border-2 border-slate-200 focus:border-[#ffb347] rounded-xl text-sm text-foreground placeholder-slate-400 outline-none transition-all"
