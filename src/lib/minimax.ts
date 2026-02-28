@@ -11,9 +11,15 @@ const MINIMAX_ANTHROPIC_BASE = "https://api.minimax.io/anthropic";
 
 export const M2_MODEL = "MiniMax-M2.5";
 
+/** Content block for multi-turn tool use (assistant: text + tool_use; user: tool_result) */
+export type M2ContentBlock =
+  | { type: "text"; text: string }
+  | { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
+  | { type: "tool_result"; tool_use_id: string; content: string };
+
 export interface M2Message {
   role: "user" | "assistant" | "system";
-  content: string | Array<{ type: "text"; text: string }>;
+  content: string | M2ContentBlock[];
 }
 
 /**
@@ -72,6 +78,123 @@ export async function completeM2(params: {
     .map((b) => (b as { text: string }).text)
     .join("\n");
   return text ?? "";
+}
+
+// ---- M2.5 with tool use (for AI assistant) ----
+
+export interface M2ToolCall {
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
+}
+
+export interface M2WithToolsResult {
+  /** Plain text from assistant (for display). */
+  content: string;
+  /** Tool calls to execute (for server-side loop). */
+  toolCalls: M2ToolCall[];
+  /** Full content array to append to conversation for next round (thinking + text + tool_use). */
+  rawAssistantContent: M2ContentBlock[];
+}
+
+/** Anthropic-compatible tool definition for MiniMax */
+export interface M2Tool {
+  name: string;
+  description: string;
+  input_schema: {
+    type: "object";
+    properties: Record<string, { type: string; description?: string }>;
+    required?: string[];
+  };
+}
+
+export async function completeM2WithTools(params: {
+  system: string;
+  messages: M2Message[];
+  tools: M2Tool[];
+  maxTokens?: number;
+  temperature?: number;
+}): Promise<M2WithToolsResult> {
+  const apiKey = process.env.MINIMAX_API_KEY_M25;
+  if (!apiKey) {
+    // eslint-disable-next-line no-console
+    console.error("[minimax] MINIMAX_API_KEY_M25 is not set");
+    throw new Error("MINIMAX_API_KEY_M25 is not set");
+  }
+
+  const body = {
+    model: M2_MODEL,
+    max_tokens: params.maxTokens ?? 4096,
+    temperature: Math.min(1, Math.max(0.01, params.temperature ?? 0.7)),
+    system: params.system,
+    tools: params.tools,
+    messages: params.messages.map((m) => ({
+      role: m.role,
+      content:
+        typeof m.content === "string"
+          ? [{ type: "text" as const, text: m.content }]
+          : m.content,
+    })),
+  };
+
+  // eslint-disable-next-line no-console
+  console.log("[minimax] M2 tools request", { messageCount: params.messages.length, toolCount: params.tools.length });
+  const res = await fetch(`${MINIMAX_ANTHROPIC_BASE}/v1/messages`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+      "Anthropic-Version": "2023-06-01",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    // eslint-disable-next-line no-console
+    console.error("[minimax] M2 API error", res.status, err?.slice(0, 300));
+    throw new Error(`M2 API error ${res.status}: ${err}`);
+  }
+
+  const data = (await res.json()) as {
+    content?: Array<{
+      type: string;
+      text?: string;
+      thinking?: string;
+      id?: string;
+      name?: string;
+      input?: Record<string, unknown>;
+    }>;
+  };
+
+  let content = "";
+  const toolCalls: M2ToolCall[] = [];
+  const rawAssistantContent: M2ContentBlock[] = [];
+
+  for (const block of data.content ?? []) {
+    if (block.type === "text" && block.text) {
+      content += (content ? "\n" : "") + block.text;
+      rawAssistantContent.push({ type: "text", text: block.text });
+    }
+    if (block.type === "thinking" && block.thinking) {
+      rawAssistantContent.push({ type: "text", text: block.thinking });
+    }
+    if (block.type === "tool_use" && block.id && block.name) {
+      const args = typeof block.input === "object" && block.input ? block.input : {};
+      toolCalls.push({ id: block.id, name: block.name, arguments: args });
+      rawAssistantContent.push({
+        type: "tool_use",
+        id: block.id,
+        name: block.name,
+        input: args,
+      });
+    }
+  }
+
+  const out = { content: content.trim(), toolCalls, rawAssistantContent };
+  // eslint-disable-next-line no-console
+  console.log("[minimax] M2 tools response", { contentLength: out.content.length, toolCallCount: out.toolCalls.length, toolNames: out.toolCalls.map((t) => t.name) });
+  return out;
 }
 
 // ---- Speech (T2A Async V2) ----

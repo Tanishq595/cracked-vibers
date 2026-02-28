@@ -21,11 +21,40 @@ import {
   Send,
   Trophy,
 } from "lucide-react";
-import { useState, useEffect, Component, type ReactNode } from "react";
+import { useState, useEffect, Component, useCallback, type ReactNode } from "react";
+import { useAuth, useUser } from "@clerk/clerk-react";
 import { KnowledgeGraph } from "../components/KnowledgeGraph";
 import { ChatbotGLB } from "../components/ChatbotGLB";
 import { useNavigate } from "react-router";
 import { useTopGaps } from "./GapAnalysis";
+
+const CHAT_HISTORY_KEY = "mustlearn_chat_history_";
+const DEFAULT_GREETING = {
+  role: "assistant" as const,
+  content:
+    "Hi! I'm your M.U.S.T.Learn AI assistant! 👋 I can read your files, list your syntheses, search your library, and answer questions—all in chat. Try: \"What files do I have?\" or \"Search my library for...\"",
+};
+
+function loadChatHistory(userId: string | null): { role: "user" | "assistant"; content: string }[] {
+  if (!userId) return [DEFAULT_GREETING];
+  try {
+    const raw = localStorage.getItem(CHAT_HISTORY_KEY + userId);
+    if (!raw) return [DEFAULT_GREETING];
+    const parsed = JSON.parse(raw) as { role: "user" | "assistant"; content: string }[];
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : [DEFAULT_GREETING];
+  } catch {
+    return [DEFAULT_GREETING];
+  }
+}
+
+function saveChatHistory(userId: string | null, messages: { role: "user" | "assistant"; content: string }[]) {
+  if (!userId) return;
+  try {
+    localStorage.setItem(CHAT_HISTORY_KEY + userId, JSON.stringify(messages));
+  } catch {
+    // ignore
+  }
+}
 
 const platforms = [
   { 
@@ -183,6 +212,9 @@ class GLBErrorBoundary extends Component<
 
 export function Dashboard() {
   const navigate = useNavigate();
+  const { getToken } = useAuth();
+  const { user } = useUser();
+  const userId = user?.id ?? null;
   const { gaps: topGaps, loading: gapsLoading } = useTopGaps(3);
   const [searchFocused, setSearchFocused] = useState(false);
   const [showAI, setShowAI] = useState(true);
@@ -194,33 +226,55 @@ export function Dashboard() {
   const [showTooltip, setShowTooltip] = useState(false);
   const [bubbleIndex, setBubbleIndex] = useState(0);
   const [bubbleTriggered, setBubbleTriggered] = useState(false);
-  const [messages, setMessages] = useState([
-    {
-      role: 'assistant',
-      content: 'Hi! I\'m your M.U.S.T.Learn AI assistant! 👋 I can help you with study plans, gap analysis, and answering questions about your learning materials. What would you like to explore today?'
-    }
-  ]);
-
+  const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>(() => loadChatHistory(null));
   const [chatLoading, setChatLoading] = useState(false);
 
-  const handleSendMessage = async () => {
-    if (!inputText.trim()) return;
+  useEffect(() => {
+    if (userId === null) return;
+    getToken()
+      .then((t) => {
+        if (!t) {
+          setMessages(loadChatHistory(userId));
+          return;
+        }
+        return fetch('/api/chat-messages', { method: 'GET', headers: { Authorization: `Bearer ${t}` } })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => {
+            if (Array.isArray(d?.messages) && d.messages.length > 0) {
+              setMessages(d.messages as { role: 'user' | 'assistant'; content: string }[]);
+            } else {
+              setMessages(loadChatHistory(userId));
+            }
+          })
+          .catch(() => setMessages(loadChatHistory(userId)));
+      })
+      .catch(() => setMessages(loadChatHistory(userId)));
+  }, [userId, getToken]);
+
+  useEffect(() => {
+    if (messages.length > 0) saveChatHistory(userId, messages);
+  }, [messages, userId]);
+
+  const handleSendMessage = useCallback(async () => {
+    if (!inputText.trim() || chatLoading) return;
 
     const userContent = inputText.trim();
-    const userMessage = { role: 'user', content: userContent };
-    setMessages((prev) => [...prev, userMessage]);
+    const userMessage = { role: 'user' as const, content: userContent };
+    const nextMessages = [...messages, userMessage];
+    setMessages(nextMessages);
     setInputText('');
     setChatLoading(true);
 
     try {
+      const token = await getToken();
       const res = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
-          messages: [...messages, userMessage].map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
+          messages: nextMessages.map((m) => ({ role: m.role, content: m.content })),
         }),
       });
       const data = await res.json();
@@ -234,17 +288,23 @@ export function Dashboard() {
       }
 
       const content = typeof data.content === 'string' ? data.content : '';
-      setMessages((prev) => [...prev, { role: 'assistant', content: content || 'No response.' }]);
+      const assistantMessage = { role: 'assistant' as const, content: content || 'No response.' };
+      setMessages((prev) => [...prev, assistantMessage]);
+
+      if (token) {
+        fetch('/api/chat-messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ messages: [userMessage, assistantMessage] }),
+        }).catch(() => {});
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Network error';
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: `Error: ${message}` },
-      ]);
+      setMessages((prev) => [...prev, { role: 'assistant', content: `Error: ${message}` }]);
     } finally {
       setChatLoading(false);
     }
-  };
+  }, [chatLoading, getToken, messages]);
 
   // Show Brain placeholder for 2 sec before revealing 3D mascot
   useEffect(() => {
@@ -793,7 +853,7 @@ export function Dashboard() {
                     key={index}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.1 }}
+                    transition={{ delay: index * 0.05 }}
                     className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
                     <div
@@ -809,51 +869,56 @@ export function Dashboard() {
                           <span className="text-xs font-bold text-[#ffb347]">AI Assistant</span>
                         </div>
                       )}
-                      <p className="text-sm leading-relaxed">{message.content}</p>
+                      <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
                     </div>
                   </motion.div>
                 ))}
+                {chatLoading && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex justify-start"
+                  >
+                    <div className="max-w-[80%] rounded-2xl p-4 bg-slate-100 border border-slate-200">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Sparkles className="w-4 h-4 text-[#ffb347]" />
+                        <span className="text-xs font-bold text-[#ffb347]">AI Assistant</span>
+                      </div>
+                      <div className="flex gap-1 items-center">
+                        <span className="inline-block w-2 h-2 rounded-full bg-[#ffb347] animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="inline-block w-2 h-2 rounded-full bg-[#ffb347] animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <span className="inline-block w-2 h-2 rounded-full bg-[#ffb347] animate-bounce" style={{ animationDelay: '300ms' }} />
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
               </div>
 
               {/* Quick Action Buttons - hidden when typing */}
-              {!inputFocused && !inputText.trim() && (
+              {!inputFocused && !inputText.trim() && !chatLoading && (
                 <div className="px-6 pb-3">
                   <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                  <button 
-                    onClick={() => {
-                      setInputText("Create a study plan for this week");
-                    }}
-                    className="flex-shrink-0 px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-900 rounded-xl text-xs font-semibold transition-colors"
-                  >
-                    📅 Study Plan
-                  </button>
-                  <button 
-                    onClick={() => {
-                      setInputText("Show my learning gaps");
-                    }}
-                    className="flex-shrink-0 px-4 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-xl text-xs font-semibold transition-colors"
-                  >
-                    🎯 Gap Analysis
-                  </button>
-                  <button 
-                    onClick={() => {
-                      setInputText("Explain my knowledge graph");
-                    }}
-                    className="flex-shrink-0 px-4 py-2 bg-cyan-100 hover:bg-cyan-200 text-cyan-700 rounded-xl text-xs font-semibold transition-colors"
-                  >
-                    🧠 Knowledge Graph
-                  </button>
-                  <button 
-                    onClick={() => {
-                      setInputText("Show my progress summary");
-                    }}
-                    className="flex-shrink-0 px-4 py-2 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-xl text-xs font-semibold transition-colors"
-                  >
-                    📊 Progress
-                  </button>
+                    <button
+                      onClick={() => setInputText("What files do I have in my library?")}
+                      className="flex-shrink-0 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-semibold transition-colors"
+                    >
+                      📁 My files
+                    </button>
+                    <button
+                      onClick={() => setInputText("List my syntheses")}
+                      className="flex-shrink-0 px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-900 rounded-xl text-xs font-semibold transition-colors"
+                    >
+                      📄 My syntheses
+                    </button>
+                    <button
+                      onClick={() => setInputText("Search my library for...")}
+                      className="flex-shrink-0 px-4 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-xl text-xs font-semibold transition-colors"
+                    >
+                      🔍 Search library
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
               {/* Chat Input */}
               <div className="p-6 pt-3 border-t border-slate-200 bg-slate-50/50">
@@ -865,7 +930,7 @@ export function Dashboard() {
                     onFocus={() => setInputFocused(true)}
                     onBlur={() => setInputFocused(false)}
                     onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                    placeholder="Ask me anything about your learning..."
+                    placeholder="Ask about your files, syntheses, or search your library..."
                     className="flex-1 px-4 py-3 bg-white border-2 border-slate-200 focus:border-[#ffb347] rounded-xl text-sm text-foreground placeholder-slate-400 outline-none transition-all"
                   />
                   <motion.button
