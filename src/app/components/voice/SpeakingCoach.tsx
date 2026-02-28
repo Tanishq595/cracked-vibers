@@ -304,106 +304,96 @@ export function SpeakingCoach({
 
   const topicLabels = coachContext?.topics?.map((t) => t.label) ?? [];
 
-  const stopConversation = useCallback(async () => {
-    if (isStopping) return;
-    setIsStopping(true);
-    setError(null);
+  const stopConversation = useCallback(
+    async () => {
+      if (isStopping) return;
+      setIsStopping(true);
+      setError(null);
 
-    const endedAt = new Date();
-    const startedAt = sessionStartRef.current ?? endedAt;
-    const totalDurationSec = Math.max(
-      0,
-      Math.round((endedAt.getTime() - startedAt.getTime()) / 1000),
-    );
+      // Capture session data before ending (for backend save)
+      const turnsToSave = conversationTurnsRef.current;
+      const startedAt = sessionStartRef.current ?? new Date();
+      const endedAt = new Date();
+      const totalDurationSec = Math.max(
+        0,
+        Math.round((endedAt.getTime() - startedAt.getTime()) / 1000),
+      );
 
-    try {
-      // Capture any final user speech that was never paired with a coach reply
-      const finalUserText = userTranscriptRef.current.trim();
-      const turnsToSave = [...conversationTurnsRef.current];
-      if (finalUserText) {
-        const lastTurn = turnsToSave[turnsToSave.length - 1];
-        if (!lastTurn || lastTurn.role !== "user" || lastTurn.text !== finalUserText) {
-          turnsToSave.push({ role: "user", text: finalUserText });
-        }
-      }
+      try {
+        await conversation.endSession();
+        setConversationActive(false);
 
-      await conversation.endSession();
-      setConversationActive(false);
-
-      // Stop and reset bot video when ending practice
-      if (videoRef.current) {
-        videoRef.current.pause();
-        videoRef.current.currentTime = 0;
-      }
-
-      // Save full session + assessment (scores/feedback) when possible
-      if (userId && turnsToSave.length > 0) {
-        try {
-          const res = await fetch("/api/speaking-session-complete", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              userId,
-              topic: topicLabels[0] ?? null,
-              topics: topicLabels,
-              coachMode,
-              startedAt: startedAt.toISOString(),
-              endedAt: endedAt.toISOString(),
-              totalDurationSec,
-              sttProvider: "browser-speech-api",
-              transcriptLanguage: "en-US",
-              conversationTurns: turnsToSave,
-            }),
-          });
-
-          if (res.ok) {
-            const data = (await res.json()) as {
-              session?: unknown;
-              assessment?: { summary?: string } | null;
-            };
-            if (data.assessment?.summary) {
-              setSessionSummary(data.assessment.summary);
-            }
-          } else {
-            // eslint-disable-next-line no-console
-            console.error(
-              "Failed to complete speaking session:",
-              res.status,
-              await res.text(),
-            );
-          }
-        } catch (e) {
-          console.error("Error while completing speaking session:", e);
-        }
-      }
-
-      if (topicLabels.length > 0) {
-        if (userId) {
+        // Save session + transcript to Supabase when we have turns and userId
+        let assessmentSummary: string | null = null;
+        if (turnsToSave.length > 0 && userId) {
           try {
-            await fetch("/api/oral-session", {
+            const res = await fetch("/api/speaking-session-complete", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ userId, topics: topicLabels }),
+              body: JSON.stringify({
+                userId,
+                topic: topicLabels[0] ?? null,
+                topics: topicLabels,
+                coachMode,
+                startedAt: startedAt.toISOString(),
+                endedAt: endedAt.toISOString(),
+                totalDurationSec,
+                sttProvider: "browser-speech-api",
+                transcriptLanguage: "en-US",
+                conversationTurns: turnsToSave.map((t) => ({
+                  role: t.role,
+                  text: t.text,
+                })),
+              }),
             });
+
+            if (res.ok) {
+              const data = (await res.json()) as {
+                session?: unknown;
+                assessment?: { summary?: string } | null;
+              };
+              if (data.assessment?.summary) {
+                assessmentSummary = data.assessment.summary;
+                setSessionSummary(assessmentSummary);
+              }
+            } else {
+              console.error(
+                "Failed to complete speaking session:",
+                res.status,
+                await res.text(),
+              );
+            }
           } catch (e) {
-            console.error("Failed to save oral session:", e);
+            console.error("Error while completing speaking session:", e);
           }
         }
-        onSessionEnd?.(topicLabels);
-        if (!sessionSummary) {
-          setSessionSummary(
-            `Session saved. Topics practiced: ${topicLabels.join(", ")}.`,
-          );
+
+        if (topicLabels.length > 0) {
+          onSessionEnd?.(topicLabels);
+          if (!assessmentSummary) {
+            setSessionSummary(
+              `Topics practiced: ${topicLabels.join(", ")}.`,
+            );
+          }
         }
+      } catch (err) {
+        console.error("Failed to stop conversation:", err);
+        setError("Failed to stop conversation properly");
+        setConversationActive(false);
+      } finally {
+        setIsStopping(false);
       }
-    } catch (err) {
-      console.error("Failed to stop conversation:", err);
-      setError("Failed to stop conversation properly");
-      setConversationActive(false);
-    } finally {
-      setIsStopping(false);
-    }
-  }, [coachMode, conversation, isStopping, onSessionEnd, topicLabels, userId, sessionSummary]);
+    },
+    [
+      conversation,
+      isStopping,
+      onSessionEnd,
+      topicLabels,
+      sessionSummary,
+      coachMode,
+      userId,
+    ],
+  );
 
   const forceStop = useCallback(() => {
     setConversationActive(false);

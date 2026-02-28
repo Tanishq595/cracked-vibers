@@ -8,7 +8,6 @@ import { Dashboard } from "./screens/Dashboard";
 import { Synthesize } from "./screens/Synthesize";
 import { Library } from "./screens/Library";
 import { SpeakingCoachScreen } from "./screens/SpeakingCoach";
-import { SpeakingAssessmentHistory } from "./screens/SpeakingAssessmentHistory";
 import { SpeakingAssessmentDetail } from "./screens/SpeakingAssessmentDetail";
 import { Search } from "./screens/Search";
 import { KnowledgeGraph } from "./screens/KnowledgeGraph";
@@ -54,10 +53,6 @@ export const router = createBrowserRouter([
               { path: "upload", loader: () => redirect("/dashboard/library") },
               { path: "library", Component: Library },
               { path: "coach", Component: SpeakingCoachScreen },
-              {
-                path: "speaking-assessments",
-                Component: SpeakingAssessmentHistory,
-              },
               {
                 path: "speaking-assessments/:sessionId",
                 Component: SpeakingAssessmentDetail,

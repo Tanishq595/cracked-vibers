@@ -154,11 +154,11 @@ export function SpeakingAssessmentDetail() {
       <div className="flex items-center gap-3">
         <button
           type="button"
-          onClick={() => navigate("/dashboard/speaking-assessments")}
+          onClick={() => navigate("/dashboard/coach")}
           className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
-          History
+          Back to coach
         </button>
         <button
           type="button"

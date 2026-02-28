@@ -26,7 +26,6 @@ const navItems = [
   { path: '/dashboard/synthesize', label: 'Synthesize', icon: Sparkles },
   { path: '/dashboard/library', label: 'Library', icon: FolderOpen },
   { path: '/dashboard/coach', label: 'Speaking coach', icon: Mic },
-  { path: '/dashboard/speaking-assessments', label: 'Speaking history', icon: TrendingUp },
   { path: '/dashboard/search', label: 'Search', icon: Search },
   { path: '/dashboard/knowledge-graph', label: 'Graph', icon: Network },
   { path: '/dashboard/gaps', label: 'Gaps', icon: TrendingDown },
