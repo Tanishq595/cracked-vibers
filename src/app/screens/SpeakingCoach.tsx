@@ -10,6 +10,7 @@ type LocationState = {
   topics?: { id: string; label: string }[];
   knowledgeGaps?: string[];
   studyPlan?: string[];
+  mode?: CoachMode;
 } | null;
 
 export function SpeakingCoachScreen() {
@@ -17,7 +18,8 @@ export function SpeakingCoachScreen() {
   const location = useLocation();
   const state = (location.state ?? null) as LocationState;
 
-  const [mode, setMode] = useState<CoachMode>("explain");
+  const initialMode: CoachMode = state?.mode ?? "explain";
+  const [mode, setMode] = useState<CoachMode>(initialMode);
   const [timerSeconds, setTimerSeconds] = useState<number | null>(null);
   const [infoOpen, setInfoOpen] = useState(false);
   const [debateMotion, setDebateMotion] = useState("");

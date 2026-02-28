@@ -78,6 +78,7 @@ function saveSets(userId: string, sets: QuestionSet[]) {
 }
 
 const PLACEHOLDER = `Optional: paste extra materials to combine with library files...`;
+const MAX_MATERIAL_CHARS = 16000;
 
 function stripMarkdownBold(text: string): string {
   if (!text || typeof text !== "string") return "";
@@ -287,6 +288,7 @@ export function Synthesize() {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [videoLoading, setVideoLoading] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
+  const [materialsTruncated, setMaterialsTruncated] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -326,10 +328,24 @@ export function Synthesize() {
     }
     const fromLibrary = parts.join("\n\n---\n\n");
     const extra = materials.trim();
-    if (fromLibrary && extra) return `${fromLibrary}\n\n---\n\n${extra}`;
-    if (fromLibrary) return fromLibrary;
-    return extra;
-  }, [libraryItems, librarySelectedKeys, materials]);
+    let combined = "";
+    if (fromLibrary && extra) combined = `${fromLibrary}\n\n---\n\n${extra}`;
+    else if (fromLibrary) combined = fromLibrary;
+    else combined = extra;
+
+    if (!combined) {
+      setMaterialsTruncated(false);
+      return combined;
+    }
+
+    if (combined.length > MAX_MATERIAL_CHARS) {
+      setMaterialsTruncated(true);
+      return combined.slice(0, MAX_MATERIAL_CHARS);
+    }
+
+    setMaterialsTruncated(false);
+    return combined;
+  }, [libraryItems, librarySelectedKeys, materials, setMaterialsTruncated]);
 
   async function handleGenerateQuestionBank() {
     const combined = await getCombinedMaterials();
@@ -932,6 +948,11 @@ export function Synthesize() {
               )}
             </Button>
           </div>
+          {materialsTruncated && (
+            <p className="text-xs text-amber-600 dark:text-amber-300">
+              Very long materials were truncated to fit the AI context window. Try focusing on a few chapters or files at a time for deeper analysis.
+            </p>
+          )}
         </CardContent>
       </Card>
 

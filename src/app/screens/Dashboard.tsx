@@ -1,8 +1,8 @@
-import { motion, AnimatePresence } from 'motion/react';
-import { 
+import { motion, AnimatePresence } from "motion/react";
+import {
   Brain,
-  Flame, 
-  Sparkles, 
+  Flame,
+  Sparkles,
   ChevronRight,
   Youtube,
   FileText,
@@ -19,11 +19,13 @@ import {
   MessageCircle,
   X,
   Send,
-  Trophy
-} from 'lucide-react';
-import { useState, useEffect, Component, type ReactNode } from 'react';
-import { KnowledgeGraph } from '../components/KnowledgeGraph';
-import { ChatbotGLB } from '../components/ChatbotGLB';
+  Trophy,
+} from "lucide-react";
+import { useState, useEffect, Component, type ReactNode } from "react";
+import { KnowledgeGraph } from "../components/KnowledgeGraph";
+import { ChatbotGLB } from "../components/ChatbotGLB";
+import { useNavigate } from "react-router";
+import { useTopGaps } from "./GapAnalysis";
 
 const platforms = [
   { 
@@ -180,6 +182,8 @@ class GLBErrorBoundary extends Component<
 }
 
 export function Dashboard() {
+  const navigate = useNavigate();
+  const { gaps: topGaps, loading: gapsLoading } = useTopGaps(3);
   const [searchFocused, setSearchFocused] = useState(false);
   const [showAI, setShowAI] = useState(true);
   const [mascotReady, setMascotReady] = useState(false);
@@ -567,44 +571,107 @@ export function Dashboard() {
           <KnowledgeGraph />
         </motion.div>
 
-        {/* Quick Stats */}
+      {/* Quick Stats + Gaps Preview */}
+      <div className="space-y-4">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
           className="rounded-2xl bg-card border border-slate-200 p-6 space-y-4 shadow-sm"
         >
-          <h3 className="font-bold text-foreground mb-6">This Week</h3>
-          
+          <h3 className="mb-6 font-bold text-foreground">This Week</h3>
+
           <div className="space-y-4">
-            <div className="p-4 rounded-xl bg-gradient-to-br from-[#ffb347]/10 to-[#ff8c42]/10 border border-[#ffb347]/20">
-              <div className="flex items-center justify-between mb-2">
+            <div className="rounded-xl border border-[#ffb347]/20 bg-gradient-to-br from-[#ffb347]/10 to-[#ff8c42]/10 p-4">
+              <div className="mb-2 flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Study Time</span>
-                <TrendingUp className="w-4 h-4 text-emerald-400" />
+                <TrendingUp className="h-4 w-4 text-emerald-400" />
               </div>
               <p className="text-3xl font-bold text-foreground">12.5h</p>
-              <p className="text-xs text-emerald-400 font-semibold mt-1">+25% from last week</p>
+              <p className="mt-1 text-xs font-semibold text-emerald-400">
+                +25% from last week
+              </p>
             </div>
 
-            <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border border-emerald-500/20">
-              <div className="flex items-center justify-between mb-2">
+            <div className="rounded-xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 p-4">
+              <div className="mb-2 flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Topics Mastered</span>
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
               </div>
               <p className="text-3xl font-bold text-foreground">7</p>
-              <p className="text-xs text-amber-400 font-semibold mt-1">3 more to go!</p>
+              <p className="mt-1 text-xs font-semibold text-amber-400">
+                3 more to go!
+              </p>
             </div>
 
-            <div className="p-4 rounded-xl bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/20">
-              <div className="flex items-center justify-between mb-2">
+            <div className="rounded-xl border border-amber-500/20 bg-gradient-to-br from-amber-500/10 to-orange-500/10 p-4">
+              <div className="mb-2 flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Gaps Closed</span>
-                <Flame className="w-4 h-4 text-amber-400" />
+                <Flame className="h-4 w-4 text-amber-400" />
               </div>
               <p className="text-3xl font-bold text-foreground">3</p>
-              <p className="text-xs text-[#ffb347] font-semibold mt-1">Keep the momentum!</p>
+              <p className="mt-1 text-xs font-semibold text-[#ffb347]">
+                Keep the momentum!
+              </p>
             </div>
           </div>
         </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+          className="rounded-2xl bg-card border border-slate-200 p-4 space-y-3 shadow-sm"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-[#ffb347]" />
+              <h3 className="text-sm font-bold text-foreground">Top gaps to close</h3>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate("/dashboard/gaps")}
+              className="inline-flex items-center gap-1 text-xs font-semibold text-[#ffb347] hover:text-[#ff8c42]"
+            >
+              View all
+              <ChevronRight className="h-3 w-3" />
+            </button>
+          </div>
+          {gapsLoading ? (
+            <p className="text-xs text-muted-foreground">Scanning your syntheses…</p>
+          ) : topGaps.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Synthesize some materials to surface your knowledge gaps.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {topGaps.map((gap) => (
+                <li
+                  key={gap.id}
+                  className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-xs text-foreground dark:border-slate-700 dark:bg-slate-900/40"
+                >
+                  <p className="line-clamp-2 font-medium">{gap.description}</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+                    {gap.topics.slice(0, 2).map((t) => (
+                      <span
+                        key={t.id}
+                        className="rounded-full border border-[#ffb347]/30 bg-[#ffb347]/10 px-2 py-0.5"
+                      >
+                        {t.label}
+                      </span>
+                    ))}
+                    {gap.topics.length > 2 && (
+                      <span className="text-[11px] text-muted-foreground">
+                        +{gap.topics.length - 2} more
+                      </span>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </motion.div>
+      </div>
       </div>
 
       {/* Recent Across Platforms - Horizontal Scroll */}

@@ -1,371 +1,636 @@
-import { motion } from 'motion/react';
-import { 
-  AlertCircle, 
-  CheckCircle2, 
-  Clock, 
-  Youtube, 
-  FileText, 
-  GraduationCap,
-  Sparkles,
+import { useEffect, useMemo, useState } from "react";
+import { useUser } from "@clerk/clerk-react";
+import { useNavigate } from "react-router";
+import { motion } from "motion/react";
+import {
+  AlertCircle,
   ArrowRight,
-  TrendingDown
-} from 'lucide-react';
-import { AIChatAssistant } from '../components/AIChatAssistant';
+  Brain,
+  CheckCircle2,
+  Clock,
+  Filter,
+  ListChecks,
+  Search as SearchIcon,
+  Sparkles,
+} from "lucide-react";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../components/ui/accordion";
+import { Input } from "../components/ui/input";
+import { Button } from "../components/ui/button";
+import { Badge } from "../components/ui/badge";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "../components/ui/chart";
+import * as Recharts from "recharts";
+import type { ChartConfig } from "../components/ui/chart";
+import { toast } from "sonner";
 
-interface GapData {
-  topic: string;
-  youtube: number;
-  notion: number;
-  classroom: number;
-  canvas: number;
-  overall: number;
+type Topic = { id: string; label: string };
+
+type SynthesisListItem = {
+  id: string;
+  title: string;
+  createdAt?: string | null;
+  topicLabels?: string[];
+};
+
+type SynthesisDetail = {
+  id: string;
+  title: string;
+  createdAt: string | null;
+  markdown: string;
+  topics: Topic[];
+};
+
+type GapInstance = {
+  id: string;
+  description: string;
+  topics: Topic[];
+  synthesisId: string;
+  synthesisTitle: string;
+  createdAt: string | null;
+};
+
+export type AggregatedGap = {
+  id: string;
+  description: string;
+  topics: Topic[];
+  instances: GapInstance[];
+  firstSeenAt: string | null;
+  lastSeenAt: string | null;
+  count: number;
+  severityScore: number;
+};
+
+type UseUserGapsState = {
+  gaps: AggregatedGap[];
+  loading: boolean;
+  error: string | null;
+};
+
+function extractGapsFromMarkdown(markdown: string): string[] {
+  if (!markdown) return [];
+  const re = /##\s*Knowledge Gaps\s*\n([\s\S]*?)(?=\n##\s|$)/i;
+  const match = markdown.match(re);
+  if (!match) return [];
+  return match[1]
+    .split("\n")
+    .map((line) => line.replace(/^[-*]\s*/, "").trim())
+    .filter((line) => line.length > 0);
 }
 
-const gapData: GapData[] = [
-  { topic: 'Cellular Respiration', youtube: 100, notion: 90, classroom: 80, canvas: 0, overall: 85 },
-  { topic: 'French Revolution', youtube: 60, notion: 100, classroom: 70, canvas: 50, overall: 70 },
-  { topic: 'Linear Algebra', youtube: 40, notion: 80, classroom: 90, canvas: 60, overall: 68 },
-  { topic: 'Quantum Mechanics', youtube: 70, notion: 50, classroom: 60, canvas: 40, overall: 55 },
-  { topic: 'Renaissance Art', youtube: 30, notion: 70, classroom: 80, canvas: 70, overall: 63 },
-  { topic: 'World War II', youtube: 85, notion: 60, classroom: 50, canvas: 30, overall: 56 },
-  { topic: 'Organic Chemistry', youtube: 50, notion: 70, classroom: 85, canvas: 60, overall: 66 },
-  { topic: 'Data Structures', youtube: 90, notion: 40, classroom: 70, canvas: 0, overall: 50 },
-];
+function inferSeverity(description: string): number {
+  const text = description.toLowerCase();
+  let score = 1;
+  if (
+    /don't understand|do not understand|no idea|completely lost|fundamental|core concept|very confused|really confused|stuck/i.test(
+      description,
+    )
+  ) {
+    score = 3;
+  } else if (
+    /confus|unsure|need more practice|weak on|review|revisit|not clear|unclear|sometimes forget/.test(
+      text,
+    )
+  ) {
+    score = 2;
+  }
+  if (text.includes("?") || /\bwhy\b|\bhow\b/.test(text)) {
+    score = Math.min(3, score + 1);
+  }
+  return score;
+}
 
-const insights = [
-  {
-    topic: 'World War II',
-    issue: 'You know WWII causes but not consequences',
-    suggestion: 'Watch this 8-min YouTube clip',
-    link: 'The Aftermath of WWII - History Matters',
-    priority: 'high',
-    timeToClose: '8 min',
-  },
-  {
-    topic: 'Linear Algebra',
-    issue: 'Missing practical applications',
-    suggestion: 'Review Canvas assignment examples',
-    link: 'Matrix Applications in Computer Graphics',
-    priority: 'medium',
-    timeToClose: '15 min',
-  },
-  {
-    topic: 'Data Structures',
-    issue: 'Theory strong, implementation weak',
-    suggestion: 'Complete these Notion coding exercises',
-    link: 'Binary Trees Implementation Guide',
-    priority: 'high',
-    timeToClose: '20 min',
-  },
-  {
-    topic: 'Quantum Mechanics',
-    issue: 'Conceptual understanding needs reinforcement',
-    suggestion: 'Read this Notion summary page',
-    link: 'Quantum Mechanics: Wave-Particle Duality',
-    priority: 'low',
-    timeToClose: '12 min',
-  },
-];
+function aggregateGapInstances(instances: GapInstance[]): AggregatedGap[] {
+  const byDescription = new Map<string, AggregatedGap>();
 
-const getCoverageColor = (value: number) => {
-  if (value === 0) return 'bg-slate-100 border-slate-300';
-  if (value < 50) return 'bg-red-500/20 border-red-500/40';
-  if (value < 70) return 'bg-amber-500/20 border-amber-500/40';
-  if (value < 85) return 'bg-[#ffb347]/20 border-[#ffb347]/40';
-  return 'bg-cyan-500/20 border-cyan-500/40';
-};
+  for (const inst of instances) {
+    const key = inst.description.trim().toLowerCase();
+    const existing = byDescription.get(key);
+    const createdAtTime = inst.createdAt ? Date.parse(inst.createdAt) : 0;
 
-const getCoverageIntensity = (value: number) => {
-  if (value === 0) return '0';
-  return (value / 100).toFixed(2);
-};
+    if (!existing) {
+      const topicsMap = new Map<string, Topic>();
+      for (const t of inst.topics) {
+        if (!topicsMap.has(t.id)) topicsMap.set(t.id, t);
+      }
+      byDescription.set(key, {
+        id: key,
+        description: inst.description.trim(),
+        topics: Array.from(topicsMap.values()),
+        instances: [inst],
+        firstSeenAt: inst.createdAt ?? null,
+        lastSeenAt: inst.createdAt ?? null,
+        count: 1,
+        severityScore: inferSeverity(inst.description),
+      });
+    } else {
+      existing.instances.push(inst);
+      existing.count += 1;
+      if (inst.createdAt) {
+        const first = existing.firstSeenAt ? Date.parse(existing.firstSeenAt) : Number.POSITIVE_INFINITY;
+        const last = existing.lastSeenAt ? Date.parse(existing.lastSeenAt) : 0;
+        existing.firstSeenAt = createdAtTime < first ? inst.createdAt : existing.firstSeenAt;
+        existing.lastSeenAt = createdAtTime > last ? inst.createdAt : existing.lastSeenAt;
+      }
+      const topicsMap = new Map<string, Topic>();
+      for (const t of existing.topics) topicsMap.set(t.id, t);
+      for (const t of inst.topics) if (!topicsMap.has(t.id)) topicsMap.set(t.id, t);
+      existing.topics = Array.from(topicsMap.values());
+      existing.severityScore = Math.max(existing.severityScore, inferSeverity(inst.description));
+    }
+  }
+
+  const aggregated = Array.from(byDescription.values());
+  aggregated.sort((a, b) => {
+    const aTime = a.lastSeenAt ? Date.parse(a.lastSeenAt) : 0;
+    const bTime = b.lastSeenAt ? Date.parse(b.lastSeenAt) : 0;
+    if (b.severityScore !== a.severityScore) {
+      return b.severityScore - a.severityScore;
+    }
+    return bTime - aTime;
+  });
+  return aggregated;
+}
+
+function useUserGaps(limit?: number): UseUserGapsState {
+  const { user } = useUser();
+  const [state, setState] = useState<UseUserGapsState>({
+    gaps: [],
+    loading: false,
+    error: null,
+  });
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+
+    async function load() {
+      setState((prev) => ({ ...prev, loading: true, error: null }));
+      try {
+        const listRes = await fetch("/api/syntheses-list", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: user.id }),
+        });
+        const listJson = await listRes.json();
+        if (!listRes.ok) {
+          throw new Error(listJson.error ?? "Failed to load syntheses");
+        }
+        const items: SynthesisListItem[] = Array.isArray(listJson.items) ? listJson.items : [];
+        if (items.length === 0) {
+          if (!cancelled) {
+            setState({ gaps: [], loading: false, error: null });
+          }
+          return;
+        }
+
+        const details = await Promise.all(
+          items.map(async (item) => {
+            try {
+              const res = await fetch("/api/synthesis-get", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ userId: user.id, synthesisId: item.id }),
+              });
+              const json = await res.json();
+              if (!res.ok) {
+                throw new Error(json.error ?? "Failed to load synthesis");
+              }
+              const detail: SynthesisDetail = {
+                id: item.id,
+                title: item.title ?? json.title ?? "Untitled synthesis",
+                createdAt: (item.createdAt as string | null | undefined) ?? (json.createdAt as string | null | undefined) ?? null,
+                markdown: typeof json.markdown === "string" ? json.markdown : "",
+                topics: Array.isArray(json.topics) ? (json.topics as Topic[]) : [],
+              };
+              return detail;
+            } catch {
+              return null;
+            }
+          }),
+        );
+
+        const validDetails = details.filter((d): d is SynthesisDetail => !!d && !!d.markdown);
+        const instances: GapInstance[] = [];
+        for (const d of validDetails) {
+          const gapLines = extractGapsFromMarkdown(d.markdown);
+          for (let i = 0; i < gapLines.length; i++) {
+            const description = gapLines[i];
+            if (!description) continue;
+            instances.push({
+              id: `${d.id}#${i}`,
+              description,
+              topics: d.topics,
+              synthesisId: d.id,
+              synthesisTitle: d.title,
+              createdAt: d.createdAt,
+            });
+          }
+        }
+
+        let aggregated = aggregateGapInstances(instances);
+        if (typeof limit === "number" && limit > 0) {
+          aggregated = aggregated.slice(0, limit);
+        }
+
+        if (!cancelled) {
+          setState({ gaps: aggregated, loading: false, error: null });
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setState({
+            gaps: [],
+            loading: false,
+            error: e instanceof Error ? e.message : "Failed to load gaps",
+          });
+        }
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, limit]);
+
+  return state;
+}
+
+export function useTopGaps(count = 3) {
+  const { gaps, loading, error } = useUserGaps(count);
+  const topGaps = useMemo(() => gaps.slice(0, count), [gaps, count]);
+  return { gaps: topGaps, loading, error };
+}
+
+const chartConfig = {
+  gaps: {
+    label: "Gaps",
+    color: "hsl(35, 100%, 60%)",
+  },
+} satisfies ChartConfig;
 
 export function GapAnalysis() {
+  const navigate = useNavigate();
+  const { gaps, loading, error } = useUserGaps();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedTopicId, setSelectedTopicId] = useState<string>("all");
+  const [addressedIds, setAddressedIds] = useState<Set<string>>(new Set());
+
+  const allTopics = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const gap of gaps) {
+      for (const t of gap.topics) {
+        if (!map.has(t.id)) map.set(t.id, t.label);
+      }
+    }
+    return Array.from(map.entries()).map(([id, label]) => ({ id, label }));
+  }, [gaps]);
+
+  const filteredGaps = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return gaps.filter((gap) => {
+      if (addressedIds.has(gap.id)) return false;
+      const inTopic =
+        selectedTopicId === "all" || gap.topics.some((t) => t.id === selectedTopicId);
+      if (!inTopic) return false;
+      if (!q) return true;
+      const haystack =
+        gap.description.toLowerCase() +
+        " " +
+        gap.topics.map((t) => t.label.toLowerCase()).join(" ");
+      return haystack.includes(q);
+    });
+  }, [gaps, searchQuery, selectedTopicId, addressedIds]);
+
+  const chartData = useMemo(() => {
+    const counts = new Map<string, { label: string; count: number }>();
+    for (const gap of gaps) {
+      for (const t of gap.topics) {
+        const key = t.id || t.label;
+        const existing = counts.get(key);
+        if (existing) {
+          existing.count += gap.count;
+        } else {
+          counts.set(key, { label: t.label, count: gap.count });
+        }
+      }
+    }
+    return Array.from(counts.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+  }, [gaps]);
+
+  const handleGenerateQuestions = async (gap: AggregatedGap) => {
+    try {
+      const topics = gap.topics.length
+        ? gap.topics
+        : [{ id: "gap", label: gap.description.slice(0, 60) }];
+      const res = await fetch("/api/questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topics, count: 8 }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error ?? "Failed to generate questions");
+      }
+      toast.success("Practice questions generated. Open the Synthesize tab to use them.");
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Failed to generate practice questions",
+      );
+    }
+  };
+
+  const handleStartTeachBack = (gap: AggregatedGap) => {
+    const topics = gap.topics.length
+      ? gap.topics
+      : [{ id: "gap", label: gap.description.slice(0, 60) }];
+    const knowledgeGaps = [gap.description];
+    navigate("/dashboard/coach", {
+      state: {
+        mode: "gaps",
+        topics,
+        knowledgeGaps,
+        studyPlan: [],
+      },
+    });
+  };
+
+  const handleMarkAddressed = (gapId: string) => {
+    setAddressedIds((prev) => new Set([...Array.from(prev), gapId]));
+  };
+
   return (
-    <>
-      <AIChatAssistant />
-      <div className="max-w-[1400px] mx-auto space-y-6">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
-      >
-        <div>
-          <h1 className="text-4xl font-bold mb-2 text-slate-900">Gap Analysis</h1>
-          <p className="text-slate-600 font-medium">
-            Identify and close knowledge gaps across all platforms
+    <div className="mx-auto max-w-5xl space-y-8 py-8">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">
+            Knowledge gaps
+          </h1>
+          <p className="text-sm text-muted-foreground max-w-xl">
+            Your syntheses&apos; <span className="font-semibold">Knowledge Gaps</span> sections,
+            stitched together so you can deliberately close weak spots.
           </p>
         </div>
-        <div className="flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-[#ffb347]/10 to-[#ff8c42]/10 border-2 border-[#ffb347]/40 rounded-xl shadow-sm">
-          <TrendingDown className="w-5 h-5 text-[#ff8c42]" />
+        <div className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3 dark:border-amber-700 dark:bg-amber-900/20">
+          <Brain className="h-6 w-6 text-amber-500" />
+          <div className="space-y-0.5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-200">
+              Metacognition
+            </p>
+            <p className="text-xs text-amber-800 dark:text-amber-100/90">
+              Spot, track, and teach back what&apos;s still fuzzy.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-card px-4 py-3 shadow-sm dark:border-slate-800">
+        <div className="relative flex-1 min-w-[220px]">
+          <SearchIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search gaps by keyword or topic…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9 text-sm"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          <select
+            className="h-9 rounded-lg border border-input bg-background px-3 text-xs text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            value={selectedTopicId}
+            onChange={(e) => setSelectedTopicId(e.target.value)}
+          >
+            <option value="all">All topics</option>
+            {allTopics.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setSearchQuery("");
+            setSelectedTopicId("all");
+          }}
+        >
+          Clear filters
+        </Button>
+      </div>
+
+      {loading && (
+        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-card py-12 text-sm text-muted-foreground dark:border-slate-800">
+          <span className="flex h-8 w-8 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
+          <p>Surfacing your knowledge gaps…</p>
+        </div>
+      )}
+
+      {!loading && error && (
+        <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-100">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <div>
-            <div className="text-2xl font-bold text-slate-900">4</div>
-            <div className="text-xs text-slate-600 font-semibold">Active Gaps</div>
+            <p className="font-semibold">Couldn&apos;t load gaps</p>
+            <p className="text-xs opacity-90">{error}</p>
           </div>
         </div>
-      </motion.div>
+      )}
 
-      {/* AI Insights */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="space-y-3"
-      >
-        <div className="flex items-center gap-2 mb-4">
-          <Sparkles className="w-5 h-5 text-[#ffb347]" />
-          <h2 className="text-xl font-bold text-slate-900">AI-Powered Insights</h2>
+      {!loading && !error && gaps.length === 0 && (
+        <div className="flex flex-col items-center justify-center gap-4 rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center dark:border-slate-700 dark:bg-slate-900/40">
+          <Sparkles className="h-8 w-8 text-amber-400" />
+          <div className="space-y-1">
+            <p className="text-base font-semibold text-foreground">
+              No gaps found yet.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Synthesize materials first to identify gaps.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate("/dashboard/synthesize")}
+          >
+            Go to Synthesize
+          </Button>
         </div>
+      )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {insights.map((insight, index) => (
+      {!loading && !error && gaps.length > 0 && (
+        <>
+          {chartData.length > 0 && (
             <motion.div
-              key={index}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.2 + index * 0.05 }}
-              whileHover={{ x: 4, scale: 1.01 }}
-              className={`group p-6 rounded-2xl bg-white border-2 transition-all cursor-pointer shadow-sm hover:shadow-md ${
-                insight.priority === 'high'
-                  ? 'border-red-300 hover:border-red-400 hover:bg-red-50/50'
-                  : insight.priority === 'medium'
-                  ? 'border-amber-300 hover:border-amber-400 hover:bg-amber-50/50'
-                  : 'border-[#ffb347]/50 hover:border-[#ffb347] hover:bg-[#ffb347]/5'
-              }`}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-2xl border border-slate-200 bg-card p-4 shadow-sm dark:border-slate-800"
             >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <h3 className="font-bold text-slate-900">{insight.topic}</h3>
-                    <span className={`text-xs px-2.5 py-1 rounded-lg font-semibold ${
-                      insight.priority === 'high'
-                        ? 'bg-red-100 text-red-700'
-                        : insight.priority === 'medium'
-                        ? 'bg-amber-100 text-amber-700'
-                        : 'bg-[#ffb347]/20 text-[#ff8c42]'
-                    }`}>
-                      {insight.priority}
-                    </span>
-                  </div>
-                  <p className="text-sm text-slate-600 mb-3 font-medium">
-                    <AlertCircle className="w-3 h-3 inline mr-1" />
-                    {insight.issue}
-                  </p>
-                  <div className="flex items-center gap-2 text-sm text-[#ff8c42] mb-2 font-semibold">
-                    <Sparkles className="w-4 h-4" />
-                    <span>{insight.suggestion}</span>
-                  </div>
-                  <p className="text-xs text-slate-500 italic font-medium">"{insight.link}"</p>
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <ListChecks className="h-4 w-4 text-amber-500" />
+                  <h2 className="text-sm font-semibold text-foreground">
+                    Gaps by topic
+                  </h2>
                 </div>
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Highest concentration of open gaps
+                </p>
               </div>
-
-              <div className="flex items-center justify-between pt-4 border-t-2 border-slate-100">
-                <div className="flex items-center gap-2 text-xs text-slate-600 font-semibold">
-                  <Clock className="w-3 h-3" />
-                  <span>{insight.timeToClose} to close</span>
-                </div>
-                <button className="flex items-center gap-2 px-4 py-2 bg-[#ffb347] hover:bg-[#ff8c42] rounded-lg text-sm font-semibold text-white transition-all group-hover:shadow-lg group-hover:shadow-[#ffb347]/30">
-                  Close Gap
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
+              <ChartContainer config={chartConfig} className="h-60">
+                <Recharts.BarChart data={chartData}>
+                  <Recharts.CartesianGrid vertical={false} strokeDasharray="3 3" />
+                  <Recharts.XAxis
+                    dataKey="label"
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={8}
+                  />
+                  <Recharts.YAxis tickLine={false} axisLine={false} tickMargin={8} />
+                  <ChartTooltip content={<ChartTooltipContent />} cursor={{ fill: "var(--muted)" }} />
+                  <Recharts.Bar
+                    dataKey="count"
+                    fill="var(--color-gaps)"
+                    radius={[6, 6, 0, 0]}
+                  />
+                </Recharts.BarChart>
+              </ChartContainer>
             </motion.div>
-          ))}
-        </div>
-      </motion.div>
+          )}
 
-      {/* Coverage Heatmap */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-        className="rounded-2xl bg-white border-2 border-slate-200 p-6 shadow-sm"
-      >
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-slate-900">Knowledge Coverage Heatmap</h2>
-          <div className="flex items-center gap-4 text-xs text-slate-600 font-medium">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded bg-slate-100 border border-slate-300" />
-              <span>No data</span>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-foreground">
+                {filteredGaps.length} active gap
+                {filteredGaps.length === 1 ? "" : "s"} surfaced from your syntheses
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Sorted by severity and recency.
+              </p>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded bg-red-500/20 border border-red-500/40" />
-              <span>Low (&lt;50%)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded bg-amber-500/20 border border-amber-500/40" />
-              <span>Medium (50-69%)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded bg-[#ffb347]/20 border border-[#ffb347]/40" />
-              <span>Good (70-84%)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded bg-cyan-500/20 border border-cyan-500/40" />
-              <span>Excellent (85%+)</span>
-            </div>
+
+            {filteredGaps.length === 0 ? (
+              <p className="rounded-xl border border-slate-200 bg-card px-4 py-3 text-sm text-muted-foreground dark:border-slate-800">
+                No gaps match the current filters. Try clearing the search or topic
+                filter.
+              </p>
+            ) : (
+              <Accordion
+                type="multiple"
+                className="divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-card dark:divide-slate-800 dark:border-slate-800"
+              >
+                {filteredGaps.map((gap) => (
+                  <AccordionItem key={gap.id} value={gap.id}>
+                    <AccordionTrigger className="px-4">
+                      <div className="flex flex-1 flex-col gap-1 text-left">
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded-full bg-amber-100 px-2 text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:bg-amber-900/40 dark:text-amber-200">
+                            {gap.severityScore >= 3
+                              ? "High"
+                              : gap.severityScore === 2
+                              ? "Medium"
+                              : "Low"}
+                          </span>
+                          <span className="text-sm font-semibold text-foreground">
+                            {gap.description}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          {gap.topics.slice(0, 4).map((t) => (
+                            <Badge
+                              key={t.id}
+                              variant="outline"
+                              className="border-amber-200 bg-amber-50/70 text-[11px] font-medium text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-100"
+                            >
+                              {t.label}
+                            </Badge>
+                          ))}
+                          {gap.topics.length > 4 && (
+                            <span className="text-[11px] text-muted-foreground">
+                              +{gap.topics.length - 4} more
+                            </span>
+                          )}
+                          <span className="ml-auto inline-flex items-center gap-1 text-[11px]">
+                            <Clock className="h-3 w-3" />
+                            {gap.lastSeenAt
+                              ? new Date(gap.lastSeenAt).toLocaleDateString()
+                              : "Unknown"}
+                          </span>
+                        </div>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="px-4 pb-4">
+                      <div className="space-y-3 text-sm">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="mt-0.5 h-4 w-4 text-amber-500" />
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                              Where this shows up
+                            </p>
+                            <ul className="mt-1 space-y-1 text-sm text-muted-foreground">
+                              {gap.instances.slice(0, 4).map((inst) => (
+                                <li key={inst.id} className="flex items-center justify-between gap-2">
+                                  <span className="truncate">
+                                    {inst.synthesisTitle}
+                                  </span>
+                                  {inst.createdAt && (
+                                    <span className="shrink-0 text-[11px] text-slate-400">
+                                      {new Date(inst.createdAt).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                </li>
+                              ))}
+                              {gap.instances.length > 4 && (
+                                <li className="text-[11px] text-muted-foreground">
+                                  +{gap.instances.length - 4} more syntheses
+                                </li>
+                              )}
+                            </ul>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => void handleGenerateQuestions(gap)}
+                            className="inline-flex items-center gap-1"
+                          >
+                            <Sparkles className="h-4 w-4" />
+                            Generate practice questions
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleStartTeachBack(gap)}
+                            className="inline-flex items-center gap-1"
+                          >
+                            <Brain className="h-4 w-4" />
+                            Start teach‑back coach
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleMarkAddressed(gap.id)}
+                            className="inline-flex items-center gap-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
+                          >
+                            <CheckCircle2 className="h-4 w-4" />
+                            Mark as addressed
+                          </Button>
+                        </div>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            )}
           </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b-2 border-slate-200">
-                <th className="text-left py-4 px-4 text-sm font-bold text-slate-700">Topic</th>
-                <th className="text-center py-4 px-4">
-                  <div className="flex flex-col items-center gap-2">
-                    <Youtube className="w-5 h-5 text-red-500" />
-                    <span className="text-xs text-slate-600 font-semibold">YouTube</span>
-                  </div>
-                </th>
-                <th className="text-center py-4 px-4">
-                  <div className="flex flex-col items-center gap-2">
-                    <FileText className="w-5 h-5 text-slate-900" />
-                    <span className="text-xs text-slate-600 font-semibold">Notion</span>
-                  </div>
-                </th>
-                <th className="text-center py-4 px-4">
-                  <div className="flex flex-col items-center gap-2">
-                    <GraduationCap className="w-5 h-5 text-emerald-600" />
-                    <span className="text-xs text-slate-600 font-semibold">Classroom</span>
-                  </div>
-                </th>
-                <th className="text-center py-4 px-4">
-                  <div className="flex flex-col items-center gap-2">
-                    <FileText className="w-5 h-5 text-orange-600" />
-                    <span className="text-xs text-slate-600 font-semibold">Canvas</span>
-                  </div>
-                </th>
-                <th className="text-center py-4 px-4">
-                  <div className="flex flex-col items-center gap-2">
-                    <CheckCircle2 className="w-5 h-5 text-[#ffb347]" />
-                    <span className="text-xs text-slate-600 font-semibold">Overall</span>
-                  </div>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {gapData.map((row, index) => (
-                <motion.tr
-                  key={row.topic}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.4 + index * 0.05 }}
-                  className="border-b border-slate-100 hover:bg-slate-50 transition-colors"
-                >
-                  <td className="py-4 px-4">
-                    <span className="font-semibold text-slate-900">{row.topic}</span>
-                  </td>
-                  <td className="py-4 px-4">
-                    <div className="flex justify-center">
-                      <motion.div
-                        whileHover={{ scale: 1.1 }}
-                        className={`w-12 h-12 rounded-lg border-2 flex items-center justify-center cursor-pointer transition-all ${getCoverageColor(row.youtube)}`}
-                        style={{ 
-                          backgroundColor: row.youtube > 0 ? `rgba(255, 0, 0, ${getCoverageIntensity(row.youtube)})` : undefined 
-                        }}
-                      >
-                        <span className="text-xs font-bold text-slate-900">{row.youtube > 0 ? `${row.youtube}%` : '—'}</span>
-                      </motion.div>
-                    </div>
-                  </td>
-                  <td className="py-4 px-4">
-                    <div className="flex justify-center">
-                      <motion.div
-                        whileHover={{ scale: 1.1 }}
-                        className={`w-12 h-12 rounded-lg border-2 flex items-center justify-center cursor-pointer transition-all ${getCoverageColor(row.notion)}`}
-                        style={{ 
-                          backgroundColor: row.notion > 0 ? `rgba(100, 100, 100, ${getCoverageIntensity(row.notion)})` : undefined 
-                        }}
-                      >
-                        <span className="text-xs font-bold text-slate-900">{row.notion > 0 ? `${row.notion}%` : '—'}</span>
-                      </motion.div>
-                    </div>
-                  </td>
-                  <td className="py-4 px-4">
-                    <div className="flex justify-center">
-                      <motion.div
-                        whileHover={{ scale: 1.1 }}
-                        className={`w-12 h-12 rounded-lg border-2 flex items-center justify-center cursor-pointer transition-all ${getCoverageColor(row.classroom)}`}
-                        style={{ 
-                          backgroundColor: row.classroom > 0 ? `rgba(52, 168, 83, ${getCoverageIntensity(row.classroom)})` : undefined 
-                        }}
-                      >
-                        <span className="text-xs font-bold text-slate-900">{row.classroom > 0 ? `${row.classroom}%` : '—'}</span>
-                      </motion.div>
-                    </div>
-                  </td>
-                  <td className="py-4 px-4">
-                    <div className="flex justify-center">
-                      <motion.div
-                        whileHover={{ scale: 1.1 }}
-                        className={`w-12 h-12 rounded-lg border-2 flex items-center justify-center cursor-pointer transition-all ${getCoverageColor(row.canvas)}`}
-                        style={{ 
-                          backgroundColor: row.canvas > 0 ? `rgba(225, 63, 47, ${getCoverageIntensity(row.canvas)})` : undefined 
-                        }}
-                      >
-                        <span className="text-xs font-bold text-slate-900">{row.canvas > 0 ? `${row.canvas}%` : '—'}</span>
-                      </motion.div>
-                    </div>
-                  </td>
-                  <td className="py-4 px-4">
-                    <div className="flex justify-center">
-                      <motion.div
-                        whileHover={{ scale: 1.1 }}
-                        className={`w-16 h-12 rounded-lg border-2 flex items-center justify-center cursor-pointer transition-all ${getCoverageColor(row.overall)}`}
-                      >
-                        <span className="text-sm font-bold text-slate-900">{row.overall}%</span>
-                      </motion.div>
-                    </div>
-                  </td>
-                </motion.tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </motion.div>
-
-      {/* Quick Stats */}
-      <div className="grid grid-cols-4 gap-4">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-          className="p-6 bg-gradient-to-br from-cyan-50 to-cyan-100/50 rounded-xl border-2 border-cyan-200 text-center shadow-sm"
-        >
-          <div className="text-3xl font-bold text-cyan-700 mb-2">87%</div>
-          <div className="text-sm text-slate-700 font-semibold">Avg Coverage</div>
-        </motion.div>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.55 }}
-          className="p-6 bg-gradient-to-br from-[#ffb347]/10 to-[#ff8c42]/20 rounded-xl border-2 border-[#ffb347]/30 text-center shadow-sm"
-        >
-          <div className="text-3xl font-bold text-[#ff8c42] mb-2">3</div>
-          <div className="text-sm text-slate-700 font-semibold">Gaps Closed This Week</div>
-        </motion.div>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
-          className="p-6 bg-gradient-to-br from-amber-50 to-amber-100/50 rounded-xl border-2 border-amber-200 text-center shadow-sm"
-        >
-          <div className="text-3xl font-bold text-amber-700 mb-2">55m</div>
-          <div className="text-sm text-slate-700 font-semibold">Est. Time to Clear</div>
-        </motion.div>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.65 }}
-          className="p-6 bg-gradient-to-br from-emerald-50 to-emerald-100/50 rounded-xl border-2 border-emerald-200 text-center shadow-sm"
-        >
-          <div className="text-3xl font-bold text-emerald-700 mb-2">8</div>
-          <div className="text-sm text-slate-700 font-semibold">Topics Mastered</div>
-        </motion.div>
-      </div>
-      </div>
-    </>
+        </>
+      )}
+    </div>
   );
 }

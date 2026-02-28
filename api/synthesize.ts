@@ -38,6 +38,8 @@ Format your response as follows (use these exact section headers in markdown, an
 
 Output only the analysis in markdown plus the JSON block. No preamble.`;
 
+const MAX_MATERIAL_CHARS = 16000;
+
 function parseKnowledgeGraphFromMarkdown(md: string): Record<string, unknown> | null {
   const match = md.match(/```json\s*([\s\S]*?)```/);
   if (!match) return null;
@@ -97,7 +99,10 @@ export default async function handler(
     title?: string;
   };
 
-  const materials = typeof rawMaterials === "string" ? rawMaterials.trim() : "";
+  const materials =
+    typeof rawMaterials === "string"
+      ? rawMaterials.trim().slice(0, MAX_MATERIAL_CHARS)
+      : "";
 
   // eslint-disable-next-line no-console
   console.log("[synthesize] POST", { materialsLen: materials.length, hasUserId: !!userId });
