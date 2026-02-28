@@ -4,6 +4,7 @@ import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { cn } from "../ui/utils";
 import { useConversation, type CoachContext, type CoachMode } from "./useConversation";
+import { ChatbotGLB } from "../ChatbotGLB";
 
 async function requestMicrophonePermission(): Promise<boolean> {
   try {
@@ -348,14 +349,24 @@ export function SpeakingCoach({
           <div className="flex flex-col gap-y-4 text-center">
             <div
               className={cn(
-                "my-10 mx-12 h-40 w-40 rounded-full bg-gradient-to-br from-cyan-400 to-indigo-500 shadow-[0_0_40px_rgba(56,189,248,0.6)] transition-transform",
-                conversationActive && conversation.isSpeaking && !isStopping
-                  ? "animate-pulse"
-                  : conversationActive && !isStopping
-                  ? "animate-[pulse_3s_ease-in-out_infinite]"
-                  : "opacity-70",
+                "my-10 mx-auto h-40 w-40 rounded-2xl overflow-hidden transition-opacity",
+                !conversationActive || isStopping ? "opacity-70" : "",
               )}
-            />
+            >
+              <ChatbotGLB
+                url="/bot/Bear.glb"
+                scale={1.8}
+                className={cn(
+                  "w-full h-full",
+                  conversationActive && conversation.isSpeaking && !isStopping
+                    ? "animate-pulse"
+                    : conversationActive && !isStopping
+                    ? "animate-[pulse_3s_ease-in-out_infinite]"
+                    : "",
+                )}
+                compact={false}
+              />
+            </div>
 
             {error && (
               <div className="mb-2 rounded-md bg-red-50 p-2 text-xs text-red-700">
