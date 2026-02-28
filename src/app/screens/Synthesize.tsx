@@ -56,6 +56,7 @@ type QuestionSet = {
   topics: Topic[];
   createdAt: string;
   flashcardKnown: Record<string, boolean>;
+  synthesisId?: string | null;
 };
 
 function loadSavedSets(userId: string): QuestionSet[] {
@@ -397,6 +398,7 @@ export function Synthesize() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Synthesis failed");
       const extractedTopics = Array.isArray(data.topics) ? data.topics : [];
+      const synthesisIdFromApi = typeof data.synthesisId === "string" ? data.synthesisId : null;
       setSynthesis({
         markdown: data.markdown ?? "",
         knowledgeGraph: data.knowledgeGraph ?? null,
@@ -443,6 +445,7 @@ export function Synthesize() {
         topics: extractedTopics,
         createdAt: new Date().toISOString(),
         flashcardKnown: {},
+        synthesisId: synthesisIdFromApi,
       };
       setCurrentSet(set);
       if (user?.id) {
@@ -501,6 +504,7 @@ export function Synthesize() {
         topics: topicsForGap,
         createdAt: new Date().toISOString(),
         flashcardKnown: {},
+        synthesisId: null,
       };
 
       setCurrentSet(set);
@@ -524,7 +528,80 @@ export function Synthesize() {
     setFlashcardFlipped(false);
   }
 
-  function setFlashcardKnown(questionId: string, known: boolean) {
+  const [cardReviewSaving, setCardReviewSaving] = useState(false);
+  const [cardReviewError, setCardReviewError] = useState<string | null>(null);
+
+  type DueCard = {
+    questionId: string;
+    synthesisId: string | null;
+    known: boolean;
+    nextReviewAt: string;
+    questionSnapshot: {
+      prompt?: string;
+      correctAnswer?: string;
+      explanation?: string;
+      type?: string;
+      options?: string[];
+      topicId?: string;
+      difficulty?: string;
+    } | null;
+  };
+  const [dueCards, setDueCards] = useState<DueCard[]>([]);
+  const [dueCardsLoading, setDueCardsLoading] = useState(false);
+  const [dueCardsError, setDueCardsError] = useState<string | null>(null);
+
+  async function loadDueCards() {
+    if (!user?.id) return;
+    setDueCardsError(null);
+    setDueCardsLoading(true);
+    try {
+      const res = await fetch("/api/card-review-due", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to load due cards");
+      setDueCards(Array.isArray((data as { items?: DueCard[] }).items) ? (data as { items: DueCard[] }).items : []);
+    } catch (e) {
+      setDueCardsError(e instanceof Error ? e.message : "Failed to load due cards");
+      setDueCards([]);
+    } finally {
+      setDueCardsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (user?.id) loadDueCards();
+  }, [user?.id]);
+
+  async function markDueCard(item: DueCard, known: boolean) {
+    if (!user?.id) return;
+    setCardReviewError(null);
+    setCardReviewSaving(true);
+    try {
+      const res = await fetch("/api/card-review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id,
+          questionId: item.questionId,
+          synthesisId: item.synthesisId,
+          known,
+          questionSnapshot: item.questionSnapshot ?? undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to save");
+      await loadDueCards();
+    } catch (e) {
+      setCardReviewError(e instanceof Error ? e.message : "Failed to save");
+    } finally {
+      setCardReviewSaving(false);
+    }
+  }
+
+  async function setFlashcardKnown(questionId: string, known: boolean) {
     if (!currentSet || !user?.id) return;
     const nextKnown = { ...currentSet.flashcardKnown, [questionId]: known };
     const updated: QuestionSet = { ...currentSet, flashcardKnown: nextKnown };
@@ -532,6 +609,44 @@ export function Synthesize() {
     const next = savedSets.map((s) => (s.id === updated.id ? updated : s));
     setSavedSets(next);
     saveSets(user.id, next);
+
+    const question = currentSet.questions.find((q) => q.id === questionId);
+    const snapshot =
+      question &&
+      (() => {
+        const s = question as Question;
+        return {
+          prompt: s.prompt,
+          correctAnswer: s.correctAnswer,
+          explanation: s.explanation,
+          type: s.type,
+          topicId: s.topicId,
+          difficulty: s.difficulty,
+          ...(Array.isArray(s.options) && { options: s.options }),
+        };
+      })();
+
+    setCardReviewError(null);
+    setCardReviewSaving(true);
+    try {
+      const res = await fetch("/api/card-review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id,
+          questionId,
+          synthesisId: currentSet.synthesisId ?? null,
+          known,
+          questionSnapshot: snapshot ?? undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error((data as { error?: string }).error ?? "Failed to save");
+    } catch (e) {
+      setCardReviewError(e instanceof Error ? e.message : "Failed to save card review");
+    } finally {
+      setCardReviewSaving(false);
+    }
   }
 
   function buildVideoPromptFromSynthesis(): string {
@@ -1036,6 +1151,75 @@ export function Synthesize() {
         </CardContent>
       </Card>
 
+      {user?.id && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Due for review</CardTitle>
+            <CardDescription>
+              Cards you marked earlier. Review again and mark Known (10 days) or Unknown (1 day).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {dueCardsLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+            {dueCardsError && <p className="text-xs text-red-600">{dueCardsError}</p>}
+            {!dueCardsLoading && dueCards.length === 0 && !dueCardsError && (
+              <p className="text-sm text-muted-foreground">No cards due for review.</p>
+            )}
+            {!dueCardsLoading && dueCards.length > 0 && (
+              <ul className="space-y-4">
+                {dueCards.map((item) => {
+                  const snap = item.questionSnapshot;
+                  const prompt = (snap?.prompt ?? "").replace(/\*\*([^*]+)\*\*/g, "$1").trim() || "Question";
+                  const answer = snap?.correctAnswer ?? "";
+                  const explanation = snap?.explanation ?? "";
+                  return (
+                    <li
+                      key={item.questionId}
+                      className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-3 bg-slate-50/50 dark:bg-slate-900/30"
+                    >
+                      <p className="text-sm font-medium text-foreground">{prompt}</p>
+                      {answer && (
+                        <p className="text-xs text-muted-foreground">
+                          <span className="font-semibold text-emerald-700 dark:text-emerald-400">Answer:</span> {answer}
+                        </p>
+                      )}
+                      {explanation && (
+                        <p className="text-xs text-muted-foreground">
+                          <span className="font-semibold">Explanation:</span> {explanation}
+                        </p>
+                      )}
+                      <div className="flex flex-wrap items-center gap-2 pt-2">
+                        <span className="text-xs text-muted-foreground">Mark this card:</span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={cardReviewSaving}
+                          className="text-emerald-600 border-emerald-200 hover:bg-emerald-50"
+                          onClick={() => markDueCard(item, true)}
+                        >
+                          <Check className="w-4 h-4 mr-1" />
+                          Known
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={cardReviewSaving}
+                          className="text-amber-600 border-amber-200 hover:bg-amber-50"
+                          onClick={() => markDueCard(item, false)}
+                        >
+                          <X className="w-4 h-4 mr-1" />
+                          Unknown
+                        </Button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {savedSets.length > 0 && (
         <Card>
           <CardHeader>
@@ -1215,11 +1399,12 @@ export function Synthesize() {
                         <ChevronRight className="w-4 h-4" />
                       </Button>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="text-xs text-muted-foreground">Mark this card:</span>
                       <Button
                         variant="outline"
                         size="sm"
+                        disabled={cardReviewSaving}
                         className="text-emerald-600 border-emerald-200 hover:bg-emerald-50"
                         onClick={() => setFlashcardKnown(currentFlashcard.id, true)}
                       >
@@ -1229,12 +1414,16 @@ export function Synthesize() {
                       <Button
                         variant="outline"
                         size="sm"
+                        disabled={cardReviewSaving}
                         className="text-amber-600 border-amber-200 hover:bg-amber-50"
                         onClick={() => setFlashcardKnown(currentFlashcard.id, false)}
                       >
                         <X className="w-4 h-4 mr-1" />
                         Unknown
                       </Button>
+                      {cardReviewError && (
+                        <span className="text-xs text-red-600">{cardReviewError}</span>
+                      )}
                     </div>
                   </>
                 )}
