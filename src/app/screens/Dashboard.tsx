@@ -124,6 +124,14 @@ function PlatformIcon({ name, className }: { name: string; className?: string })
       </svg>
     );
   }
+  if (name === "Canvas") {
+    return (
+      <svg className={c} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+        <circle cx="12" cy="12" r="10" fill="#E13F2F" />
+        <path fill="#fff" fillRule="evenodd" d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm0 6.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+      </svg>
+    );
+  }
   return null;
 }
 
@@ -1181,14 +1189,8 @@ export function Dashboard() {
                 <div className="absolute top-2 right-2 px-2 py-1 bg-black/60 backdrop-blur-sm rounded-lg border border-white/10">
                   <span className="text-xs text-white font-semibold">{item.time}</span>
                 </div>
-                <div 
-                  className="absolute top-2 left-2 w-8 h-8 rounded-lg flex items-center justify-center backdrop-blur-sm border"
-                  style={{ 
-                    backgroundColor: `${item.platformColor}20`,
-                    borderColor: `${item.platformColor}40`
-                  }}
-                >
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.platformColor }} />
+                <div className="absolute top-2 left-2 w-8 h-8 rounded-lg flex items-center justify-center bg-white/90 backdrop-blur-sm border border-white/20 shadow-sm">
+                  <PlatformIcon name={item.platform === 'Classroom' ? 'Google Classroom' : item.platform} className="w-5 h-5" />
                 </div>
               </div>
 
