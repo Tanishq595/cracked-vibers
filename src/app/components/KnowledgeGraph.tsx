@@ -14,11 +14,20 @@ interface GraphLink extends d3.SimulationLinkDatum<GraphNode> {
   strength: number;
 }
 
-export function KnowledgeGraph() {
+export interface KnowledgeGraphData {
+  nodes?: Array<{ id: string; label: string }>;
+  edges?: Array<{ from: string; to: string; type?: string }>;
+}
+
+interface KnowledgeGraphProps {
+  data?: KnowledgeGraphData | null;
+}
+
+export function KnowledgeGraph({ data }: KnowledgeGraphProps = {}) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const simulationRef = useRef<d3.Simulation<GraphNode, GraphLink> | null>(null);
-  const [dimensions, setDimensions] = useState({ width: 800, height: 320 });
+  const [dimensions, setDimensions] = useState({ width: 800, height: 420 });
 
   useEffect(() => {
     // Update dimensions based on container
@@ -42,28 +51,69 @@ export function KnowledgeGraph() {
     // Clear previous content
     d3.select(svgRef.current).selectAll('*').remove();
 
-    // Sample data - Knowledge topics
-    const nodes: GraphNode[] = [
-      { id: 'calculus', label: 'Calculus', radius: 24, connections: 4, x: width / 2, y: height / 2 },
-      { id: 'physics', label: 'Physics', radius: 20, connections: 3, x: width / 2, y: height / 2 },
-      { id: 'chemistry', label: 'Chemistry', radius: 22, connections: 3, x: width / 2, y: height / 2 },
-      { id: 'biology', label: 'Biology', radius: 18, connections: 2, x: width / 2, y: height / 2 },
-      { id: 'stats', label: 'Statistics', radius: 16, connections: 2, x: width / 2, y: height / 2 },
-      { id: 'algebra', label: 'Algebra', radius: 20, connections: 3, x: width / 2, y: height / 2 },
-      { id: 'history', label: 'History', radius: 16, connections: 2, x: width / 2, y: height / 2 },
-      { id: 'literature', label: 'Literature', radius: 14, connections: 1, x: width / 2, y: height / 2 },
-    ];
+    let nodes: GraphNode[];
+    let links: GraphLink[];
 
-    const links: GraphLink[] = [
-      { source: 'calculus', target: 'physics', strength: 3 },
-      { source: 'calculus', target: 'stats', strength: 2 },
-      { source: 'calculus', target: 'algebra', strength: 3 },
-      { source: 'chemistry', target: 'biology', strength: 2 },
-      { source: 'physics', target: 'biology', strength: 2 },
-      { source: 'stats', target: 'algebra', strength: 2 },
-      { source: 'physics', target: 'chemistry', strength: 2 },
-      { source: 'history', target: 'literature', strength: 1 },
-    ];
+    const inputNodes = Array.isArray(data?.nodes) ? data!.nodes : [];
+    const inputEdges = Array.isArray(data?.edges) ? data!.edges : [];
+
+    if (inputNodes.length > 0) {
+      const nodeMap = new Map<string, GraphNode>();
+      inputNodes.forEach((n) => {
+        nodeMap.set(n.id, {
+          id: n.id,
+          label: n.label,
+          radius: 18,
+          connections: 0,
+          x: width / 2,
+          y: height / 2,
+        });
+      });
+
+      inputEdges.forEach((e) => {
+        const from = nodeMap.get(e.from);
+        const to = nodeMap.get(e.to);
+        if (!from || !to) return;
+        from.connections += 1;
+        to.connections += 1;
+      });
+
+      nodes = Array.from(nodeMap.values()).map((n) => ({
+        ...n,
+        radius: 16 + 2 * Math.max(1, Math.min(5, n.connections)),
+      }));
+
+      links = inputEdges
+        .filter((e) => nodeMap.has(e.from) && nodeMap.has(e.to))
+        .map((e) => ({
+          source: e.from,
+          target: e.to,
+          strength: e.type === 'prerequisite' ? 3 : 2,
+        }));
+    } else {
+      // Sample fallback data - generic knowledge topics
+      nodes = [
+        { id: 'calculus', label: 'Calculus', radius: 24, connections: 4, x: width / 2, y: height / 2 },
+        { id: 'physics', label: 'Physics', radius: 20, connections: 3, x: width / 2, y: height / 2 },
+        { id: 'chemistry', label: 'Chemistry', radius: 22, connections: 3, x: width / 2, y: height / 2 },
+        { id: 'biology', label: 'Biology', radius: 18, connections: 2, x: width / 2, y: height / 2 },
+        { id: 'stats', label: 'Statistics', radius: 16, connections: 2, x: width / 2, y: height / 2 },
+        { id: 'algebra', label: 'Algebra', radius: 20, connections: 3, x: width / 2, y: height / 2 },
+        { id: 'history', label: 'History', radius: 16, connections: 2, x: width / 2, y: height / 2 },
+        { id: 'literature', label: 'Literature', radius: 14, connections: 1, x: width / 2, y: height / 2 },
+      ];
+
+      links = [
+        { source: 'calculus', target: 'physics', strength: 3 },
+        { source: 'calculus', target: 'stats', strength: 2 },
+        { source: 'calculus', target: 'algebra', strength: 3 },
+        { source: 'chemistry', target: 'biology', strength: 2 },
+        { source: 'physics', target: 'biology', strength: 2 },
+        { source: 'stats', target: 'algebra', strength: 2 },
+        { source: 'physics', target: 'chemistry', strength: 2 },
+        { source: 'history', target: 'literature', strength: 1 },
+      ];
+    }
 
     // Create SVG container
     const svg = d3.select(svgRef.current)
@@ -220,7 +270,7 @@ export function KnowledgeGraph() {
   }, [dimensions]);
 
   return (
-    <div ref={containerRef} className="relative h-[320px] w-full bg-gradient-to-br from-indigo-50 to-cyan-50 rounded-xl overflow-hidden border border-slate-200">
+    <div ref={containerRef} className="relative h-[420px] w-full bg-gradient-to-br from-indigo-50 to-cyan-50 rounded-xl overflow-hidden border border-slate-200">
       <svg ref={svgRef} className="w-full h-full" />
       
       {/* Zoom hint */}
