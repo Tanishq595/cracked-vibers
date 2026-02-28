@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, lazy, Suspense } from "react";
 import { useUser } from "@clerk/clerk-react";
 import { motion, AnimatePresence } from "motion/react";
 import { FolderOpen, FileText, Loader2, RefreshCw, UploadCloud, Trash2, Download, Eye, FolderPlus, Folder, MoreHorizontal, Pencil } from "lucide-react";
@@ -20,6 +20,10 @@ import {
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import { Upload } from "./Upload";
+
+const PdfEditorViewer = lazy(() =>
+  import("../components/PdfEditorViewer").then((m) => ({ default: m.PdfEditorViewer }))
+);
 
 const FOLDER_STORAGE_KEY = "mustlearn_library_folders_";
 
@@ -174,6 +178,7 @@ function FolderSection({
         ) : (
           items.map((item) => {
           const name = item.key.split("/").pop() || item.key;
+          const isPdf = name.toLowerCase().endsWith(".pdf");
           const last =
             item.lastModified && !Number.isNaN(Date.parse(item.lastModified))
               ? new Date(item.lastModified).toLocaleString()
@@ -219,12 +224,27 @@ function FolderSection({
                     ))}
                   </DropdownMenuContent>
                 </DropdownMenu>
+                {isPdf && (
+                  <button
+                    type="button"
+                    onClick={() => void onPreview(item)}
+                    disabled={loadingKey === item.key}
+                    className="inline-flex items-center justify-center rounded-lg p-2 text-[#ffb347] hover:bg-[#ffb347]/10 dark:hover:bg-[#ffb347]/20 hover:text-[#ff8c42] disabled:opacity-50"
+                    title="Edit (highlight & notes)"
+                  >
+                    {loadingKey === item.key && loadingAction === "preview" ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Pencil className="w-4 h-4" />
+                    )}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => void onPreview(item)}
                   disabled={loadingKey === item.key}
                   className="inline-flex items-center justify-center rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-foreground disabled:opacity-50"
-                  title="Preview (open in new tab)"
+                  title={isPdf ? "Preview (open in editor)" : "Preview (open in new tab)"}
                 >
                   {loadingKey === item.key && loadingAction === "preview" ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -278,6 +298,7 @@ export function Library() {
   const [editingName, setEditingName] = useState("");
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("New folder");
+  const [pdfPreview, setPdfPreview] = useState<{ url: string; key: string; name: string } | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -331,15 +352,15 @@ export function Library() {
     }
   }
 
-  const itemsByFolder = useCallback(() => {
+  const itemsByFolder = useMemo(() => {
     const uncategorized: LibraryItem[] = [];
     const byFolder: Record<string, LibraryItem[]> = {};
-    folders.forEach((f) => {
+    (folders ?? []).forEach((f) => {
       byFolder[f.id] = [];
     });
-    items.forEach((item) => {
-      const folderId = fileToFolder[item.key];
-      if (!folderId || !folders.some((f) => f.id === folderId)) {
+    (items ?? []).forEach((item) => {
+      const folderId = fileToFolder?.[item.key];
+      if (!folderId || !(folders ?? []).some((f) => f.id === folderId)) {
         uncategorized.push(item);
       } else {
         if (!byFolder[folderId]) byFolder[folderId] = [];
@@ -347,7 +368,7 @@ export function Library() {
       }
     });
     return { uncategorized, byFolder };
-  }, [items, folders, fileToFolder])();
+  }, [items, folders, fileToFolder]);
 
   async function getFileUrl(objectKey: string): Promise<string> {
     const res = await fetch("/api/storage-download-url", {
@@ -361,11 +382,17 @@ export function Library() {
   }
 
   async function handlePreview(item: LibraryItem) {
+    const name = item.key.split("/").pop() || item.key;
+    const isPdf = name.toLowerCase().endsWith(".pdf");
     setLoadingKey(item.key);
     setLoadingAction("preview");
     try {
       const url = await getFileUrl(item.key);
-      window.open(url, "_blank", "noopener,noreferrer");
+      if (isPdf) {
+        setPdfPreview({ url, key: item.key, name });
+      } else {
+        window.open(url, "_blank", "noopener,noreferrer");
+      }
     } catch {
       setError("Could not open file for preview");
     } finally {
@@ -493,6 +520,7 @@ export function Library() {
   }
 
   return (
+    <>
     <div className="mx-auto max-w-4xl space-y-6 py-8">
       <div className="flex items-center justify-between gap-4">
         <div>
@@ -694,6 +722,17 @@ export function Library() {
         </div>
       )}
     </div>
+    {pdfPreview && (
+      <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-background"><Loader2 className="w-8 h-8 animate-spin text-[#ffb347]" /></div>}>
+        <PdfEditorViewer
+          fileUrl={pdfPreview.url}
+          fileKey={pdfPreview.key}
+          fileName={pdfPreview.name}
+          onClose={() => setPdfPreview(null)}
+        />
+      </Suspense>
+    )}
+    </>
   );
 }
 

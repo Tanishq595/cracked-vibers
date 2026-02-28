@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import { defineConfig } from 'vite'
 import path from 'path'
+import fs from 'fs'
 import type { Connect } from 'vite'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
@@ -139,10 +140,29 @@ function runVercelHandlerWithBody(handler: (req: VercelReq, res: VercelRes) => P
   }
 }
 
+// Copy PDF.js worker to public so it's served from same origin (avoids CDN/CORS issues)
+function copyPdfWorker() {
+  const src = path.resolve(__dirname, 'node_modules/pdfjs-dist/build/pdf.worker.min.js')
+  const dest = path.resolve(__dirname, 'public/pdf.worker.min.js')
+  if (fs.existsSync(src)) {
+    fs.mkdirSync(path.dirname(dest), { recursive: true })
+    fs.copyFileSync(src, dest)
+  }
+}
+
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    {
+      name: 'copy-pdf-worker',
+      buildStart() {
+        copyPdfWorker()
+      },
+      configureServer() {
+        copyPdfWorker()
+      },
+    },
     {
       name: 'api-dev',
       configureServer(server) {
