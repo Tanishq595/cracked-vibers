@@ -28,6 +28,8 @@ import coachResponseHandler from './api/coach-response'
 import canvasFetchHandler from './api/canvas-fetch'
 import canvasAuthUrlHandler from './api/canvas-auth-url'
 import canvasCallbackHandler from './api/canvas-callback'
+import googleClassroomAuthHandler from './api/google-classroom-auth'
+import googleClassroomAuthCallbackHandler from './api/google-classroom-auth-callback'
 
 function readBody(nodeReq: Connect.IncomingMessage): Promise<Record<string, unknown> | null> {
   return new Promise((resolve, reject) => {
@@ -82,6 +84,8 @@ const API_HANDLERS: Record<string, (req: Connect.IncomingMessage, res: Connect.S
   '/api/canvas/fetch': runVercelHandlerGet(canvasFetchHandler),
   '/api/canvas/auth-url': runVercelHandlerWithBody(canvasAuthUrlHandler),
   '/api/canvas/callback': runVercelHandlerGetWithRedirect(canvasCallbackHandler),
+  '/api/google-classroom-auth': runVercelHandlerGetWithRedirect(googleClassroomAuthHandler),
+  '/api/google-classroom-auth/callback': runVercelHandlerGetWithRedirect(googleClassroomAuthCallbackHandler),
 }
 
 type VercelReq = {
@@ -162,7 +166,7 @@ function runVercelHandlerGetWithRedirect(
       headers: nodeReq.headers as Record<string, string | string[] | undefined>,
       query,
     }
-    const res: VercelRes & { redirect: (url: string) => void } = {
+    const res: VercelRes & { redirect: (url: string) => void; setHeader?: (name: string, value: string | string[]) => void } = {
       status(code: number) {
         nodeRes.statusCode = code
         return {
@@ -171,6 +175,9 @@ function runVercelHandlerGetWithRedirect(
             nodeRes.end(JSON.stringify(body))
           },
         }
+      },
+      setHeader(name: string, value: string | string[]) {
+        nodeRes.setHeader(name, value)
       },
       redirect(redirectUrl: string) {
         nodeRes.statusCode = 302

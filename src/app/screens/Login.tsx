@@ -1,12 +1,18 @@
 import { motion } from 'motion/react';
-import { Link, useLocation } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { Brain } from 'lucide-react';
-import { SignIn } from '@clerk/clerk-react';
+import { SignIn, SignedIn, SignedOut } from '@clerk/clerk-react';
 
-export function Login() {
+const Login: React.FC = () => {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const isSignInPath = pathname.startsWith('/sign-in');
   const clerkPath = isSignInPath ? '/sign-in' : '/login';
+
+  // Handle Google Classroom OAuth flow — full page navigation so the server can redirect to Google
+  const handleGoogleClassroomLogin = () => {
+    window.location.href = '/api/google-classroom-auth';
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 relative overflow-hidden">
@@ -29,6 +35,16 @@ export function Login() {
           <h1 className="text-3xl font-black text-slate-900 mb-2 tracking-tight">M.U.S.T.Learn</h1>
           <p className="text-slate-600 font-medium">Your brain's second memory—organized.</p>
         </div>
+
+        {/* Conditionally render Google Classroom Login Button */}
+        <SignedOut>
+          <button
+            onClick={handleGoogleClassroomLogin}
+            className="w-full bg-[#ffb347] text-white font-bold py-3 px-6 rounded-md shadow-md hover:bg-[#ff8c42]"
+          >
+            Sign in with Google Classroom
+          </button>
+        </SignedOut>
 
         <SignIn
           routing="path"
@@ -54,4 +70,7 @@ export function Login() {
       </motion.div>
     </div>
   );
-}
+};
+
+export { Login };
+export default Login;
