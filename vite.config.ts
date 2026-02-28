@@ -46,6 +46,7 @@ export default defineConfig({
 
   // Proxy other /api requests to a backend (e.g. Next.js on 3000). /api/init-user is handled above in dev.
   server: {
+    port: 3000,
     proxy: {
       '/api': {
         target: process.env.VITE_API_URL || 'http://localhost:3000',
