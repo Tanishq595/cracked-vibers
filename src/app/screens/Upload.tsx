@@ -228,16 +228,16 @@ export function Upload() {
                     initial={{ opacity: 0, x: -8 }}
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: 8 }}
-                    className="flex items-center gap-4 rounded-xl bg-card border border-slate-200 dark:border-slate-700 p-3"
+                    className="flex items-center gap-4 rounded-xl bg-card border border-slate-200 dark:border-slate-700 p-3 min-w-0"
                   >
                     <FileText className="w-5 h-5 text-slate-500 flex-shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-foreground truncate">
+                    <div className="min-w-0 flex-1 overflow-hidden">
+                      <p className="text-sm font-medium text-foreground truncate" title={item.file.name}>
                         {item.file.name}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {(item.file.size / 1024).toFixed(1)} KB
-                        {item.objectKey && ` • ${item.objectKey}`}
+                        {item.status === "done" && " • Uploaded"}
                       </p>
                       {item.error && (
                         <p className="text-xs text-red-500 mt-0.5">{item.error}</p>

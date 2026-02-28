@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useUser } from "@clerk/clerk-react";
 import ReactMarkdown from "react-markdown";
 import { useLocation, useNavigate } from "react-router";
@@ -30,7 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { FileText, Loader2, BookOpen, Layers, ChevronLeft, ChevronRight, Check, X } from "lucide-react";
+import { FileText, Folder, Loader2, BookOpen, Layers, ChevronLeft, ChevronRight, Check, X, Video } from "lucide-react";
 
 const STORAGE_KEY_PREFIX = "mustlearn_qsets_";
 
@@ -219,6 +219,27 @@ type LibraryItem = {
   lastModified: string | null;
 };
 
+const FOLDER_STORAGE_KEY = "mustlearn_library_folders_";
+type LibraryFolder = { id: string; name: string };
+type FolderState = { folders: LibraryFolder[]; fileToFolder: Record<string, string> };
+
+function loadFolderState(userId: string): FolderState {
+  try {
+    const raw = localStorage.getItem(FOLDER_STORAGE_KEY + userId);
+    if (!raw) return { folders: [], fileToFolder: {} };
+    const parsed = JSON.parse(raw) as FolderState;
+    return {
+      folders: Array.isArray(parsed.folders) ? parsed.folders : [],
+      fileToFolder:
+        parsed.fileToFolder && typeof parsed.fileToFolder === "object"
+          ? parsed.fileToFolder
+          : {},
+    };
+  } catch {
+    return { folders: [], fileToFolder: {} };
+  }
+}
+
 export function Synthesize() {
   const { user } = useUser();
   const [materials, setMaterials] = useState("");
@@ -246,6 +267,8 @@ export function Synthesize() {
   const [libraryError, setLibraryError] = useState<string | null>(null);
   const [librarySelectedKeys, setLibrarySelectedKeys] = useState<string[]>([]);
   const [libraryAdding, setLibraryAdding] = useState(false);
+  const [libraryFolders, setLibraryFolders] = useState<LibraryFolder[]>([]);
+  const [libraryFileToFolder, setLibraryFileToFolder] = useState<Record<string, string>>({});
 
   const [currentSet, setCurrentSet] = useState<QuestionSet | null>(null);
   const [savedSets, setSavedSets] = useState<QuestionSet[]>([]);
@@ -256,10 +279,18 @@ export function Synthesize() {
   const [flashcardIndex, setFlashcardIndex] = useState(0);
   const [flashcardFlipped, setFlashcardFlipped] = useState(false);
 
+  const [videoTaskId, setVideoTaskId] = useState<string | null>(null);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoLoading, setVideoLoading] = useState(false);
+  const [videoError, setVideoError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!user?.id) return;
     void loadHistory(user.id);
     setSavedSets(loadSavedSets(user.id));
+    const folderState = loadFolderState(user.id);
+    setLibraryFolders(folderState.folders);
+    setLibraryFileToFolder(folderState.fileToFolder);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
@@ -307,6 +338,9 @@ export function Synthesize() {
     setTopics([]);
     setAudioUrl(null);
     setCurrentSet(null);
+    setVideoUrl(null);
+    setVideoTaskId(null);
+    setVideoError(null);
     setSynthLoading(true);
     try {
       const res = await fetch("/api/synthesize", {
@@ -400,6 +434,110 @@ export function Synthesize() {
     saveSets(user.id, next);
   }
 
+  function buildVideoPromptFromSynthesis(): string {
+    if (!synthesis?.markdown) return "";
+    const baseMd = stripKnowledgeGraphSection(synthesis.markdown);
+    const topicsMd = extractSection(baseMd, "Topics");
+    const planMd = extractSection(baseMd, "Study Plan");
+    const topicLines = sectionLines(topicsMd);
+    const planLines = sectionLines(planMd);
+    const topicList = topicLines.slice(0, 8).join(", ");
+    const planList = planLines.slice(0, 5).join(". ");
+    const raw = `Educational explainer video. Topics: ${topicList}. Study plan: ${planList}. Clean, modern, professional style.`;
+    return raw.slice(0, 2000);
+  }
+
+  async function handleGenerateVideo() {
+    setVideoError(null);
+    setVideoUrl(null);
+    setVideoLoading(true);
+    try {
+      let markdown = synthesis?.markdown ?? "";
+      let extractedTopics = topics;
+
+      if (!markdown || extractedTopics.length === 0) {
+        const combined = await getCombinedMaterials();
+        if (!combined.trim()) {
+          setVideoError("Select at least one file from Library or paste materials.");
+          return;
+        }
+        const res = await fetch("/api/synthesize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            materials: combined,
+            userId: user?.id,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Synthesis failed");
+        markdown = data.markdown ?? "";
+        extractedTopics = Array.isArray(data.topics) ? data.topics : [];
+        setSynthesis({
+          markdown,
+          knowledgeGraph: data.knowledgeGraph ?? null,
+        });
+        setTopics(extractedTopics);
+      }
+
+      const baseMd = stripKnowledgeGraphSection(markdown);
+      const topicsMd = extractSection(baseMd, "Topics");
+      const planMd = extractSection(baseMd, "Study Plan");
+      const topicLines = sectionLines(topicsMd);
+      const planLines = sectionLines(planMd);
+      const topicList = topicLines.slice(0, 8).join(", ");
+      const planList = planLines.slice(0, 5).join(". ");
+      const prompt = `Educational explainer video. Topics: ${topicList}. Study plan: ${planList}. Clean, modern, professional style.`.slice(0, 2000);
+
+      if (!prompt.trim()) {
+        setVideoError("No synthesis content to turn into a video.");
+        return;
+      }
+
+      const createRes = await fetch("/api/video", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      });
+      const createData = (await createRes.json()) as { task_id?: string; error?: string };
+      if (!createRes.ok) {
+        throw new Error(createData.error ?? "Failed to start video generation");
+      }
+      const taskId = createData.task_id;
+      if (!taskId) {
+        throw new Error("No task ID returned");
+      }
+      setVideoTaskId(taskId);
+
+      const maxAttempts = 80;
+      const intervalMs = 3000;
+      for (let i = 0; i < maxAttempts; i++) {
+        const queryRes = await fetch(`/api/video?task_id=${encodeURIComponent(taskId)}`);
+        const queryData = (await queryRes.json()) as {
+          status?: string;
+          video_url?: string;
+          error?: string;
+        };
+        if (queryData.status === "success" && queryData.video_url) {
+          setVideoUrl(queryData.video_url);
+          setVideoTaskId(null);
+          return;
+        }
+        if (queryData.status === "fail") {
+          throw new Error(queryData.error ?? "Video generation failed");
+        }
+        await new Promise((r) => setTimeout(r, intervalMs));
+      }
+      throw new Error("Video generation timed out");
+    } catch (e) {
+      setVideoError(e instanceof Error ? e.message : "Failed to generate video");
+      setVideoUrl(null);
+      setVideoTaskId(null);
+    } finally {
+      setVideoLoading(false);
+    }
+  }
+
   async function loadHistory(userId: string) {
     setHistoryError(null);
     setHistoryLoading(true);
@@ -439,6 +577,9 @@ export function Synthesize() {
       });
       setTopics(Array.isArray(data.topics) ? data.topics : []);
       setAudioUrl(null);
+      setVideoUrl(null);
+      setVideoTaskId(null);
+      setVideoError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load synthesis");
     } finally {
@@ -473,6 +614,9 @@ export function Synthesize() {
       setLibrarySelectedKeys((prev) =>
         prev.filter((k) => items.some((it) => it.key === k))
       );
+      const folderState = loadFolderState(user.id);
+      setLibraryFolders(folderState.folders);
+      setLibraryFileToFolder(folderState.fileToFolder);
     } catch (e) {
       setLibraryError(
         e instanceof Error ? e.message : "Failed to load library files"
@@ -487,6 +631,19 @@ export function Synthesize() {
       prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
     );
   }
+
+  const libraryItemsByFolder = useMemo(() => {
+    const uncategorized: LibraryItem[] = [];
+    const byFolder: Record<string, LibraryItem[]> = {};
+    for (const f of libraryFolders) byFolder[f.id] = [];
+    for (const item of libraryItems) {
+      const folderId = libraryFileToFolder[item.key];
+      if (!folderId) uncategorized.push(item);
+      else if (byFolder[folderId]) byFolder[folderId].push(item);
+      else uncategorized.push(item);
+    }
+    return { uncategorized, byFolder };
+  }, [libraryItems, libraryFolders, libraryFileToFolder]);
 
   const filteredQuestions = currentSet
     ? currentSet.questions.filter((q) => {
@@ -551,34 +708,84 @@ export function Synthesize() {
                     </p>
                   )}
                   {!libraryLoading && libraryItems.length > 0 && (
-                    <ul className="max-h-64 space-y-2 overflow-auto text-sm">
-                      {libraryItems.map((item) => {
-                        const name = item.key.split("/").pop() || item.key;
-                        const last =
-                          item.lastModified &&
-                          !Number.isNaN(Date.parse(item.lastModified))
-                            ? new Date(item.lastModified).toLocaleString()
-                            : "Unknown";
+                    <div className="max-h-64 space-y-4 overflow-auto text-sm">
+                      {libraryItemsByFolder.uncategorized.length > 0 && (
+                        <section>
+                          <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            <Folder className="w-4 h-4" />
+                            Uncategorized
+                          </h3>
+                          <ul className="space-y-2">
+                            {libraryItemsByFolder.uncategorized.map((item) => {
+                              const name = item.key.split("/").pop() || item.key;
+                              const last =
+                                item.lastModified &&
+                                !Number.isNaN(Date.parse(item.lastModified))
+                                  ? new Date(item.lastModified).toLocaleString()
+                                  : "Unknown";
+                              return (
+                                <li
+                                  key={item.key}
+                                  className="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 hover:border-[#ffb347] hover:bg-[#ffb347]/5 dark:border-slate-700"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={librarySelectedKeys.includes(item.key)}
+                                    onChange={() => toggleLibrarySelected(item.key)}
+                                    className="h-4 w-4 rounded border-slate-300 text-[#ffb347] focus:ring-[#ffb347]"
+                                  />
+                                  <FileText className="w-4 h-4 text-slate-500 shrink-0" />
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate font-medium text-foreground">{name}</p>
+                                    <p className="truncate text-[11px] text-zinc-500">{last}</p>
+                                  </div>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </section>
+                      )}
+                      {libraryFolders.map((folder) => {
+                        const items = libraryItemsByFolder.byFolder[folder.id] ?? [];
+                        if (items.length === 0) return null;
                         return (
-                          <li
-                            key={item.key}
-                            className="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 hover:border-[#ffb347] hover:bg-[#ffb347]/5 dark:border-slate-700"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={librarySelectedKeys.includes(item.key)}
-                              onChange={() => toggleLibrarySelected(item.key)}
-                              className="h-4 w-4 rounded border-slate-300 text-[#ffb347] focus:ring-[#ffb347]"
-                            />
-                            <FileText className="w-4 h-4 text-slate-500 shrink-0" />
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate font-medium text-foreground">{name}</p>
-                              <p className="truncate text-[11px] text-zinc-500">{last}</p>
-                            </div>
-                          </li>
+                          <section key={folder.id}>
+                            <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                              <Folder className="w-4 h-4" />
+                              {folder.name}
+                            </h3>
+                            <ul className="space-y-2">
+                              {items.map((item) => {
+                                const name = item.key.split("/").pop() || item.key;
+                                const last =
+                                  item.lastModified &&
+                                  !Number.isNaN(Date.parse(item.lastModified))
+                                    ? new Date(item.lastModified).toLocaleString()
+                                    : "Unknown";
+                                return (
+                                  <li
+                                    key={item.key}
+                                    className="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 hover:border-[#ffb347] hover:bg-[#ffb347]/5 dark:border-slate-700"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={librarySelectedKeys.includes(item.key)}
+                                      onChange={() => toggleLibrarySelected(item.key)}
+                                      className="h-4 w-4 rounded border-slate-300 text-[#ffb347] focus:ring-[#ffb347]"
+                                    />
+                                    <FileText className="w-4 h-4 text-slate-500 shrink-0" />
+                                    <div className="min-w-0 flex-1">
+                                      <p className="truncate font-medium text-foreground">{name}</p>
+                                      <p className="truncate text-[11px] text-zinc-500">{last}</p>
+                                    </div>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </section>
                         );
                       })}
-                    </ul>
+                    </div>
                   )}
                 </div>
               </DialogContent>
@@ -609,20 +816,40 @@ export function Synthesize() {
               disabled={synthLoading}
             />
           </div>
-          <Button
-            onClick={() => void handleGenerateQuestionBank()}
-            disabled={synthLoading || (librarySelectedKeys.length === 0 && !materials.trim())}
-            className="w-full sm:w-auto"
-          >
-            {synthLoading ? (
-              <span className="flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Generating…
-              </span>
-            ) : (
-              "Generate question bank & flashcards"
-            )}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              onClick={() => void handleGenerateQuestionBank()}
+              disabled={synthLoading || videoLoading || (librarySelectedKeys.length === 0 && !materials.trim())}
+              className="w-full sm:w-auto"
+            >
+              {synthLoading ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Generating…
+                </span>
+              ) : (
+                "Generate question bank & flashcards"
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => void handleGenerateVideo()}
+              disabled={synthLoading || videoLoading || (librarySelectedKeys.length === 0 && !materials.trim())}
+              className="inline-flex items-center gap-2"
+            >
+              {videoLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Generating video…
+                </>
+              ) : (
+                <>
+                  <Video className="w-4 h-4" />
+                  Generate video
+                </>
+              )}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -982,7 +1209,7 @@ export function Synthesize() {
           </Card>
 
           {topics.length > 0 && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="outline"
                 onClick={() => {
@@ -997,6 +1224,46 @@ export function Synthesize() {
                 Practice with Speaking Coach
               </Button>
             </div>
+          )}
+
+          {(videoLoading || videoUrl || videoError) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Video className="w-5 h-5" />
+                  Generated video
+                </CardTitle>
+                <CardDescription>
+                  AI-generated video from your synthesis (MiniMax Hailuo). Generation can take a few minutes.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {videoLoading && (
+                  <div className="flex flex-col items-center justify-center gap-3 py-8 text-muted-foreground">
+                    <Loader2 className="w-10 h-10 animate-spin" />
+                    <p className="text-sm">Creating your video… This may take 2–5 minutes.</p>
+                  </div>
+                )}
+                {videoError && !videoLoading && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-800 dark:text-red-200">
+                    {videoError}
+                  </div>
+                )}
+                {videoUrl && !videoLoading && (
+                  <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-black">
+                    <video
+                      src={videoUrl}
+                      controls
+                      className="w-full aspect-video"
+                      playsInline
+                      preload="metadata"
+                    >
+                      Your browser does not support the video tag.
+                    </video>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           )}
 
           {synthesis.knowledgeGraph && (

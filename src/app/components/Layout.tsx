@@ -1,8 +1,8 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router';
 import { useState } from 'react';
 import { useClerk, useUser } from '@clerk/clerk-react';
-const LOGO_SVG = '/company_logo/logo1.png';
-const LOGO_PNG = '/company_logo/logo1.png';
+const LOGO_SVG = '/company_logo/logo.png';
+const LOGO_PNG = '/company_logo/logo.png';
 import { 
   LayoutDashboard, 
   Search, 
@@ -15,7 +15,6 @@ import {
   Menu,
   X,
   LogOut,
-  Upload,
   FolderOpen,
   Mic
 } from 'lucide-react';
@@ -25,7 +24,6 @@ const navItems = [
   { path: '/dashboard', label: 'Home', icon: LayoutDashboard },
   { path: '/dashboard/synthesize', label: 'Synthesize', icon: Sparkles },
   { path: '/dashboard/library', label: 'Library', icon: FolderOpen },
-  { path: '/dashboard/upload', label: 'Upload', icon: Upload },
   { path: '/dashboard/coach', label: 'Speaking coach', icon: Mic },
   { path: '/dashboard/search', label: 'Search', icon: Search },
   { path: '/dashboard/knowledge-graph', label: 'Graph', icon: Network },
@@ -83,12 +81,12 @@ export function Layout() {
         sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
       }`}>
         {/* Logo - top left */}
-        <div className="p-6 border-b border-sidebar-border flex items-center min-h-[52px]">
+        <div className="h-20 px-6 border-b border-sidebar-border flex items-center">
           {showLogo ? (
             <img
               src={logoSrc}
               alt="Company logo"
-              className="max-h-8 w-auto object-contain object-left"
+              className="max-h-11 w-auto object-contain object-left ml-1"
               onError={handleLogoError}
             />
           ) : (
