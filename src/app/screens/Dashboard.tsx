@@ -192,7 +192,9 @@ export function Dashboard() {
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>(() => loadChatHistory(null));
   const [chatLoading, setChatLoading] = useState(false);
   const [youtubeHistoryCount, setYoutubeHistoryCount] = useState<number | null>(null);
+  const [youtubeConnected, setYoutubeConnected] = useState<boolean | null>(null);
   const [classroomCourseCount, setClassroomCourseCount] = useState<number | null>(null);
+  const [classroomConnected, setClassroomConnected] = useState<boolean | null>(null);
   const [insightCards, setInsightCards] = useState<Array<{ title: string; subtitle: string; progress: number; synthesisId?: string }>>([]);
   const [insightsLoading, setInsightsLoading] = useState(true);
   const [insightsError, setInsightsError] = useState(false);
@@ -281,15 +283,40 @@ export function Dashboard() {
 
   useEffect(() => {
     let cancelled = false;
+    getToken()
+      .then((token) => {
+        if (!token) {
+          setYoutubeConnected(false);
+          return;
+        }
+        return fetch('/api/youtube-data', { method: 'GET', headers: { Authorization: `Bearer ${token}` } });
+      })
+      .then((res) => (res?.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        setYoutubeConnected(data?.connected === true);
+      })
+      .catch(() => {
+        if (!cancelled) setYoutubeConnected(false);
+      });
+    return () => { cancelled = true; };
+  }, [getToken]);
+
+  useEffect(() => {
+    let cancelled = false;
     fetch('/api/google-classroom-data', { credentials: 'include' })
       .then((res) => (res.ok ? res.json() : { connected: false }))
       .then((data) => {
         if (cancelled) return;
         const list = Array.isArray(data?.courses) ? data.courses : [];
+        setClassroomConnected(data?.connected === true);
         setClassroomCourseCount(data?.connected ? list.length : 0);
       })
       .catch(() => {
-        if (!cancelled) setClassroomCourseCount(0);
+        if (!cancelled) {
+          setClassroomConnected(false);
+          setClassroomCourseCount(0);
+        }
       });
     return () => { cancelled = true; };
   }, []);
@@ -702,14 +729,27 @@ export function Dashboard() {
                       <Icon className="w-6 h-6" style={{ color: platform.color }} />
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${
-                        platform.status === 'synced' ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'
-                      }`} />
-                      <span className={`text-xs font-semibold ${
-                        platform.status === 'synced' ? 'text-emerald-400' : 'text-amber-400'
-                      }`}>
-                        {platform.status === 'synced' ? 'Synced' : 'Syncing...'}
-                      </span>
+                      {(() => {
+                        const connected = platform.name === 'YouTube'
+                          ? youtubeConnected
+                          : platform.name === 'Google Classroom'
+                            ? classroomConnected
+                            : platform.status === 'synced';
+                        const isSynced = connected === true;
+                        const isChecking = connected === null && (platform.name === 'YouTube' || platform.name === 'Google Classroom');
+                        return (
+                          <>
+                            <div className={`w-2 h-2 rounded-full ${
+                              isSynced ? 'bg-emerald-500' : isChecking ? 'bg-amber-500 animate-pulse' : 'bg-slate-400'
+                            }`} />
+                            <span className={`text-xs font-semibold ${
+                              isSynced ? 'text-emerald-400' : isChecking ? 'text-amber-400' : 'text-muted-foreground'
+                            }`}>
+                              {isSynced ? 'Synced' : isChecking ? 'Checking...' : 'Not connected'}
+                            </span>
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                   

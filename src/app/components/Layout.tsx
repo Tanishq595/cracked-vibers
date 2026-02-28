@@ -18,8 +18,6 @@ import {
   LogOut,
   FolderOpen,
   Mic,
-  Youtube,
-  GraduationCap,
   Trophy,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -34,8 +32,6 @@ const navItems = [
   { path: '/dashboard/knowledge-graph', label: 'Graph', icon: Network },
   { path: '/dashboard/gaps', label: 'Gaps', icon: TrendingDown },
   { path: '/dashboard/planner', label: 'Planner', icon: Calendar },
-  { path: '/dashboard/youtube', label: 'YouTube', icon: Youtube },
-  { path: '/dashboard/classroom', label: 'Classroom', icon: GraduationCap },
 ];
 
 export function Layout() {
