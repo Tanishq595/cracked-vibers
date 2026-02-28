@@ -41,6 +41,7 @@ export function SpeakingCoach({
   >([]);
   const [sessionSummary, setSessionSummary] = useState<string | null>(null);
   const [micOn, setMicOn] = useState(true);
+  const [coachAudioPlaying, setCoachAudioPlaying] = useState(false);
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
   const recognitionRef = useRef<{ start(): void; stop(): void } | null>(null);
   const userTranscriptRef = useRef("");
@@ -48,10 +49,18 @@ export function SpeakingCoach({
   const sessionStartRef = useRef<Date | null>(null);
   const lastRequestedTextRef = useRef<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const conversationActiveRef = useRef(false);
+  const micOnRef = useRef(true);
 
   useEffect(() => {
     userTranscriptRef.current = userTranscript;
   }, [userTranscript]);
+  useEffect(() => {
+    conversationActiveRef.current = conversationActive;
+  }, [conversationActive]);
+  useEffect(() => {
+    micOnRef.current = micOn;
+  }, [micOn]);
   useEffect(() => {
     conversationTurnsRef.current = conversationTurns;
   }, [conversationTurns]);
@@ -105,12 +114,24 @@ export function SpeakingCoach({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: text.trim() }),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        setCoachAudioPlaying(false);
+        return;
+      }
       const data = (await res.json()) as { audioBase64?: string; contentType?: string };
-      if (!data.audioBase64) return;
+      if (!data.audioBase64) {
+        setCoachAudioPlaying(false);
+        return;
+      }
       const contentType = data.contentType || "audio/mpeg";
       const audio = new Audio(`data:${contentType};base64,${data.audioBase64}`);
       ttsAudioRef.current = audio;
+
+      // Disable mic while coach is speaking (avoid picking up TTS and talking over)
+      setCoachAudioPlaying(true);
+      try {
+        recognitionRef.current?.stop();
+      } catch {}
 
       // Start bot video when the coach starts speaking
       const video = videoRef.current;
@@ -132,8 +153,18 @@ export function SpeakingCoach({
           v.pause();
           v.currentTime = 0;
         }
+        setCoachAudioPlaying(false);
+        // Re-enable mic when coach finishes speaking (if session still active and mic was on)
+        if (conversationActiveRef.current && micOnRef.current) {
+          try {
+            recognitionRef.current?.start();
+          } catch (e) {
+            console.warn("Speech recognition start after coach finished failed", e);
+          }
+        }
       };
     } catch {
+      setCoachAudioPlaying(false);
       // TTS optional; ignore errors
     }
   }, []);
@@ -435,10 +466,13 @@ export function SpeakingCoach({
     }
   }, [micOn]);
 
+  const coachIsThinking = conversationActive && conversation.status === "connected" && conversation.isSpeaking && !coachAudioPlaying;
+
   const getConnectionStatus = () => {
     if (isStopping) return "Stopping conversation…";
     if (isStarting) return "Starting conversation…";
     if (conversationActive && conversation.status === "connected") {
+      if (coachIsThinking) return "Coach is thinking…";
       return conversation.isSpeaking ? "Coach is speaking" : "Coach is listening";
     }
     return "Ready to start practice";
@@ -454,15 +488,24 @@ export function SpeakingCoach({
         </CardHeader>
         <CardContent className="pb-6 pt-0">
           <div className="flex flex-col gap-y-4 text-center">
-            <div className="mx-auto mt-4 mb-4 flex h-40 w-36 items-center justify-center sm:mt-8 sm:mb-6 sm:h-52 sm:w-44">
-              <video
-                ref={videoRef}
-                src="/bot/Bear_talking.mp4"
-                loop
-                muted
-                playsInline
-                className="h-full w-full rounded-lg object-cover"
-              />
+            <div className="mx-auto mt-4 mb-4 flex h-40 w-36 flex-col items-center justify-center sm:mt-8 sm:mb-6 sm:h-52 sm:w-44">
+              <div className="relative flex h-full w-full items-center justify-center">
+                <video
+                  ref={videoRef}
+                  src="/bot/Bear_talking.mp4"
+                  loop
+                  muted
+                  playsInline
+                  className="h-full w-full rounded-lg object-cover"
+                />
+                {coachIsThinking && (
+                  <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1 rounded-full bg-black/50 px-3 py-1.5" aria-label="Coach is thinking">
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-white" style={{ animationDelay: "0ms", animationDuration: "0.6s" }} />
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-white" style={{ animationDelay: "150ms", animationDuration: "0.6s" }} />
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-white" style={{ animationDelay: "300ms", animationDuration: "0.6s" }} />
+                  </div>
+                )}
+              </div>
             </div>
 
             {error && (
@@ -547,9 +590,21 @@ export function SpeakingCoach({
                   className="rounded-full px-5"
                   size="lg"
                   onClick={toggleMic}
-                  title={micOn ? "Mute microphone" : "Unmute microphone"}
+                  disabled={coachAudioPlaying}
+                  title={
+                    coachAudioPlaying
+                      ? "Mic paused while coach is speaking"
+                      : micOn
+                        ? "Mute microphone"
+                        : "Unmute microphone"
+                  }
                 >
-                  {micOn ? (
+                  {coachAudioPlaying ? (
+                    <>
+                      <MicOff className="mr-2 h-4 w-4 opacity-60" />
+                      Mic paused
+                    </>
+                  ) : micOn ? (
                     <>
                       <Mic className="mr-2 h-4 w-4" />
                       Mic on
