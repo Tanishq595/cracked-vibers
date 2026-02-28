@@ -90,6 +90,9 @@ export function SpeakingCoach({
             debateMotion: coachContext?.debateMotion,
             debateSide: coachContext?.debateSide,
           }),
+          ...(coachMode === "exam" && {
+            examType: coachContext?.examType && coachContext.examType !== "" ? coachContext.examType : null,
+          }),
         }),
       });
       const data = (await res.json()) as { message?: string };
@@ -97,7 +100,7 @@ export function SpeakingCoach({
     } catch {
       return undefined;
     }
-  }, [coachContext?.topics, coachContext?.knowledgeGaps, coachContext?.studyPlan, coachMode]);
+  }, [coachContext?.topics, coachContext?.knowledgeGaps, coachContext?.studyPlan, coachContext?.examType, coachMode]);
 
   // Play coach message with ElevenLabs TTS when API is configured
   // and sync the bot video with the spoken audio.

@@ -2,8 +2,9 @@
  * Vercel serverless: POST /api/coach-response
  * Generates a single coach reply using MiniMax from full conversation context.
  * Uses the AI Moderator summary (prompts/ai-moderator-spec-summary.txt) as the canonical behavior specification.
+ * For mode "exam", uses prompts/exam-scopes.txt and optional examType (HKDSE | IELTS | TOEFL | ISO).
  *
- * Body: { conversationHistory, messageIndex, topics, knowledgeGaps, studyPlan, mode?, debateMotion?, debateSide? }
+ * Body: { conversationHistory, messageIndex, topics, knowledgeGaps, studyPlan, mode?, examType?, debateMotion?, debateSide? }
  * Returns: { message: string }
  */
 import type { VercelRequest, VercelResponse } from "@vercel/node";
@@ -12,6 +13,10 @@ import { join } from "path";
 import { completeM2 } from "../src/lib/minimax";
 
 const SPEC_FILENAME = "ai-moderator-spec-summary.txt";
+const EXAM_SCOPES_FILENAME = "exam-scopes.txt";
+
+const EXAM_TYPES = ["HKDSE", "IELTS", "TOEFL", "ISO"] as const;
+type ExamType = (typeof EXAM_TYPES)[number];
 
 function loadSpec(): string {
   const candidates = [
@@ -27,6 +32,31 @@ function loadSpec(): string {
     }
   }
   return "";
+}
+
+function loadExamScopes(): string {
+  const candidates = [
+    join(process.cwd(), "prompts", EXAM_SCOPES_FILENAME),
+    join(__dirname, "..", "prompts", EXAM_SCOPES_FILENAME),
+  ];
+  for (const path of candidates) {
+    try {
+      if (!existsSync(path)) continue;
+      return readFileSync(path, "utf-8");
+    } catch {
+      continue;
+    }
+  }
+  return "";
+}
+
+function getExamScopeSection(fullText: string, examType: string): string {
+  const begin = `--- BEGIN_${examType} ---`;
+  const end = `--- END_${examType} ---`;
+  const startIdx = fullText.indexOf(begin);
+  const endIdx = fullText.indexOf(end);
+  if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) return "";
+  return fullText.slice(startIdx + begin.length, endIdx).trim();
 }
 
 const FALLBACKS = [
@@ -50,7 +80,9 @@ function buildSystemPrompt(
   plan: string[],
   debateMotion?: string,
   debateSide?: string,
-  specText?: string
+  specText?: string,
+  examType?: string | null,
+  examScopesFull?: string
 ): string {
   const preamble = specText
     ? `You are an AI Moderator / speaking coach. The following document is your canonical behavior specification. Apply its principles, directives, and tone in all interactions (adapted to a single-learner context where relevant).\n\n---\n\n${specText}\n\n---\n\nCurrent session (follow the spec above; then apply this):\n`
@@ -64,11 +96,31 @@ Your role: neutral moderator. State the motion and side at the start; give clear
     return preamble + debateBlock;
   }
 
+  if (mode === "exam" && examScopesFull) {
+    const strictRule =
+      "STRICT SCOPE: Do not answer anything beyond the scope above. If the user asks about a different exam, or off-topic, politely say you only assist with this exam type and redirect them back.";
+    if (examType && EXAM_TYPES.includes(examType as ExamType)) {
+      const section = getExamScopeSection(examScopesFull, examType);
+      if (section) {
+        let context = preamble + `Mode: EXAM STYLE. The user has chosen ${examType}. You must respond ONLY as the ${examType} coach.\n\n`;
+        context += section + "\n\n" + strictRule + "\n\n";
+        context += "Reply in 1–3 short sentences when speaking (conversation); you may give longer structured feedback when the user asks for it. Be encouraging and exam-focused.";
+        return context;
+      }
+    }
+    const autoDetect =
+      "First, from the user's words and context, determine which exam type they are referring to: HKDSE, IELTS, TOEFL, or ISO. Then respond ONLY as the coach for that one exam type using the corresponding section below. Do not answer beyond that exam's scope. If unclear, ask which exam they are preparing for (HKDSE / IELTS / TOEFL / ISO).";
+    let context = preamble + `Mode: EXAM STYLE. ${autoDetect}\n\n`;
+    context += examScopesFull + "\n\n" + strictRule + "\n\n";
+    context += "Reply in 1–3 short sentences when speaking; you may give longer structured feedback when the user asks for it. Be encouraging and exam-focused.";
+    return context;
+  }
+
   const modeDesc =
     mode === "gaps"
       ? "Focus on filling knowledge gaps; ask the user to teach back specific gap items."
       : mode === "exam"
-      ? "Act like an examiner: ask for clear definitions, relationships, or applications."
+      ? "Act like an examiner within HKDSE/IELTS/TOEFL/ISO scope; ask for clear definitions, strategies, or practice. Stay within the chosen exam's scope only."
       : "Help the user explain and solidify their understanding of key topics.";
   let context = preamble + `Mode: ${mode.toUpperCase()}. ${modeDesc}\n`;
   if (topicLabels.length > 0) {
@@ -102,6 +154,7 @@ export default async function handler(
     knowledgeGaps?: string[];
     studyPlan?: string[];
     mode?: string;
+    examType?: string | null;
     debateMotion?: string;
     debateSide?: string;
   };
@@ -118,13 +171,20 @@ export default async function handler(
   const knowledgeGaps = Array.isArray(body.knowledgeGaps) ? body.knowledgeGaps : [];
   const studyPlan = Array.isArray(body.studyPlan) ? body.studyPlan : [];
   const mode = typeof body.mode === "string" ? body.mode : "explain";
+  const examType =
+    body.examType === null || body.examType === ""
+      ? undefined
+      : EXAM_TYPES.includes((body.examType as string) as ExamType)
+        ? (body.examType as ExamType)
+        : undefined;
   const debateMotion = typeof body.debateMotion === "string" ? body.debateMotion.trim() : undefined;
   const debateSide = body.debateSide === "against" || body.debateSide === "for" ? body.debateSide : undefined;
 
   // eslint-disable-next-line no-console
-  console.log("[coach-response] POST", { messageIndex, mode, historyLen: conversationHistory.length });
+  console.log("[coach-response] POST", { messageIndex, mode, examType, historyLen: conversationHistory.length });
 
   const specText = loadSpec();
+  const examScopesFull = mode === "exam" ? loadExamScopes() : undefined;
   const systemPrompt = buildSystemPrompt(
     mode,
     topicLabels,
@@ -132,7 +192,9 @@ export default async function handler(
     studyPlan,
     debateMotion,
     debateSide,
-    specText
+    specText,
+    examType ?? undefined,
+    examScopesFull
   );
 
   let userContent: string;
@@ -169,7 +231,10 @@ export default async function handler(
         ? `This is the first message. The user is in TEACH BACK GAPS mode. Give a brief opening (2–3 sentences) that: (1) welcomes them and names the mode, (2) says you will have them explain things in their own words so you can spot and fill gaps together, (3) invites them to start by teaching back the first topic or gap. Be friendly and clear so they know what to expect.`
         : `This is the first message. The user is in TEACH BACK GAPS mode. Give a brief opening (2–3 sentences) that: (1) welcomes them and names the mode, (2) says you will have them explain what they've learned in their own words so you can spot gaps and ask follow-ups, (3) invites them to start whenever ready. Be friendly and clear so they know what to expect.`;
     } else if (mode === "exam") {
-      userContent = `This is the first message. The user is in EXAM STYLE mode. Give a brief opening (2–3 sentences) that: (1) welcomes them and names the mode, (2) says you will run a timed, exam-like practice and ask them to explain or define as in a test, (3) invites them to begin when ready (or state when you will start the clock if applicable). Be friendly and clear so they know what to expect.`;
+      const examHint = examType
+        ? `The user has chosen ${examType}. Mention that you will only help within ${examType} scope.`
+        : "You will help with one of: HKDSE, IELTS, TOEFL, or ISO. Ask which exam they are preparing for if not clear, and say you will only answer within that exam's scope.";
+      userContent = `This is the first message. The user is in EXAM STYLE mode. Give a brief opening (2–3 sentences) that: (1) welcomes them and names the mode, (2) ${examHint} (3) invites them to say which exam or ask a practice question. Be friendly and clear so they know what to expect.`;
     } else {
       userContent = "The session just started. Say a brief, friendly opening (2–3 sentences) that names the current mode and tells the user what to expect, so they are not confused or lost.";
     }

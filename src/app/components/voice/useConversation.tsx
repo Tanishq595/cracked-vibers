@@ -6,6 +6,9 @@ export type CoachMode = "explain" | "gaps" | "exam" | "debate";
 
 export type DebateSide = "for" | "against";
 
+/** Exam style mode: which exam to scope to. Empty/null = auto-detect from user's words. */
+export type ExamType = "HKDSE" | "IELTS" | "TOEFL" | "ISO" | "";
+
 export interface CoachContext {
   topics?: { id: string; label: string }[];
   knowledgeGaps?: string[];
@@ -14,6 +17,8 @@ export interface CoachContext {
   debateMotion?: string;
   /** Debate mode: which side the user is arguing */
   debateSide?: DebateSide;
+  /** Exam style mode: which exam (HKDSE/IELTS/TOEFL/ISO). Empty = auto-detect. */
+  examType?: ExamType;
 }
 
 interface UseConversationProps {
