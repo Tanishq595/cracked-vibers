@@ -22,6 +22,7 @@ type Question = {
   options?: string[];
   correctAnswer: string;
   explanation: string;
+  difficulty?: "easy" | "medium" | "hard";
 };
 
 const QUESTIONS_SYSTEM = `You are an assessment designer for M.U.S.T.Learn.
@@ -33,6 +34,7 @@ Constraints:
 - For MCQ, include 4 options with only ONE clearly best answer.
 - For short-answer, answers should be 1–2 sentences or a formula.
 - Explanations MUST be simple and student-friendly.
+- Assign each question a "difficulty": "easy", "medium", or "hard".
 
 You MUST respond with STRICT JSON only (no markdown, no prose), in this TypeScript-like shape:
 {
@@ -42,27 +44,42 @@ You MUST respond with STRICT JSON only (no markdown, no prose), in this TypeScri
       "topicId": "string",
       "prompt": "string",
       "type": "mcq" | "short",
-      "options": ["A", "B", "C", "D"], // required for mcq, omit for short
+      "options": ["A", "B", "C", "D"],
       "correctAnswer": "string",
-      "explanation": "string"
+      "explanation": "string",
+      "difficulty": "easy" | "medium" | "hard"
     }
   ]
 }`;
 
+function extractJson(text: string): string {
+  const trimmed = text.trim();
+  const codeBlock = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (codeBlock) return codeBlock[1].trim();
+  return trimmed;
+}
+
 function parseQuestions(jsonText: string): Question[] {
   try {
-    const parsed = JSON.parse(jsonText) as { questions?: Question[] };
+    const raw = extractJson(jsonText);
+    const parsed = JSON.parse(raw) as { questions?: Question[] };
     if (!parsed || !Array.isArray(parsed.questions)) return [];
-    return parsed.questions.filter(
-      (q) =>
-        q &&
-        typeof q.id === "string" &&
-        typeof q.topicId === "string" &&
-        typeof q.prompt === "string" &&
-        (q.type === "mcq" || q.type === "short") &&
-        typeof q.correctAnswer === "string" &&
-        typeof q.explanation === "string"
-    );
+    return parsed.questions
+      .filter(
+        (q) =>
+          q &&
+          typeof q.id === "string" &&
+          typeof q.topicId === "string" &&
+          typeof q.prompt === "string" &&
+          (q.type === "mcq" || q.type === "short") &&
+          typeof q.correctAnswer === "string" &&
+          typeof q.explanation === "string"
+      )
+      .map((q) => ({
+        ...q,
+        difficulty:
+          q.difficulty === "easy" || q.difficulty === "hard" ? q.difficulty : "medium",
+      }));
   } catch {
     return [];
   }
@@ -82,42 +99,51 @@ export default async function handler(
     count?: number;
   };
 
+  // eslint-disable-next-line no-console
+  console.log("[questions] POST", { topicsCount: Array.isArray(topics) ? topics.length : 0, count });
+
   if (!Array.isArray(topics) || topics.length === 0) {
+    // eslint-disable-next-line no-console
+    console.warn("[questions] Missing or empty topics");
     res.status(400).json({ error: "Missing or empty 'topics' array" });
     return;
   }
 
-  const maxQuestions = Math.min(Math.max(count ?? 3, 1), 8);
-
+  const maxQuestions = Math.min(Math.max(count ?? 5, 1), 15);
   const trimmedTopics = topics.slice(0, 5);
   const topicSummary = trimmedTopics
     .map((t) => `- id: ${t.id}, label: ${t.label}`)
     .join("\n");
-
   const userContent = `Create ${maxQuestions} diverse questions across these topics:\n${topicSummary}\n\nReturn ONLY valid JSON as specified.`;
 
   try {
+    // eslint-disable-next-line no-console
+    console.log("[questions] Calling completeM2, maxQuestions:", maxQuestions);
     const result = await completeM2({
       system: QUESTIONS_SYSTEM,
-      messages: [
-        {
-          role: "user",
-          content: userContent,
-        },
-      ],
-      maxTokens: 1024,
+      messages: [{ role: "user", content: userContent }],
+      maxTokens: 2048,
       temperature: 0.6,
     });
 
+    // eslint-disable-next-line no-console
+    console.log("[questions] Raw result length:", typeof result === "string" ? result.length : 0);
+
     const questions = parseQuestions(result);
     if (!questions.length) {
+      // eslint-disable-next-line no-console
+      console.error("[questions] Parse failed or empty. Raw result (first 500 chars):", String(result).slice(0, 500));
       res.status(500).json({ error: "Failed to parse questions" });
       return;
     }
 
+    // eslint-disable-next-line no-console
+    console.log("[questions] OK, returning", questions.length, "questions");
     res.status(200).json({ questions });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Question generation failed.";
+    // eslint-disable-next-line no-console
+    console.error("[questions] Error:", message, err);
     res.status(500).json({ error: message });
   }
 }

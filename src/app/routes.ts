@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import { createBrowserRouter, redirect } from "react-router";
+import { createBrowserRouter } from "react-router";
 import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { RootLayout } from "./components/RootLayout";
@@ -17,6 +17,7 @@ import { Login } from "./screens/Login";
 import { SignUp } from "./screens/SignUp";
 import { Onboarding } from "./screens/Onboarding";
 import { NotFound } from "./screens/NotFound";
+import { Landing } from "./screens/Landing";
 
 export const router = createBrowserRouter([
   {
@@ -26,7 +27,7 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        loader: () => redirect("/login"),
+        Component: Landing,
       },
       {
         path: "login",

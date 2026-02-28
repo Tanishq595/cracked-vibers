@@ -3,7 +3,7 @@ import { useLocation } from "react-router";
 import { useUser } from "@clerk/clerk-react";
 import { Info } from "lucide-react";
 import { SpeakingCoach } from "../components/voice/SpeakingCoach";
-import type { CoachContext, CoachMode } from "../components/voice/useConversation";
+import type { CoachContext, CoachMode, DebateSide } from "../components/voice/useConversation";
 import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
 
 type LocationState = {
@@ -20,14 +20,26 @@ export function SpeakingCoachScreen() {
   const [mode, setMode] = useState<CoachMode>("explain");
   const [timerSeconds, setTimerSeconds] = useState<number | null>(null);
   const [infoOpen, setInfoOpen] = useState(false);
+  const [debateMotion, setDebateMotion] = useState("");
+  const [debateSide, setDebateSide] = useState<DebateSide>("for");
 
-  const coachContext: CoachContext | null = state
-    ? {
-        topics: state.topics ?? [],
-        knowledgeGaps: state.knowledgeGaps ?? [],
-        studyPlan: state.studyPlan ?? [],
-      }
-    : null;
+  const coachContext: CoachContext | null = (() => {
+    const base = state
+      ? {
+          topics: state.topics ?? [],
+          knowledgeGaps: state.knowledgeGaps ?? [],
+          studyPlan: state.studyPlan ?? [],
+        }
+      : {};
+    if (mode === "debate") {
+      return {
+        ...base,
+        debateMotion: debateMotion.trim() || undefined,
+        debateSide,
+      } as CoachContext;
+    }
+    return (state ? { ...base } : null) as CoachContext | null;
+  })();
 
   useEffect(() => {
     if (timerSeconds === null || timerSeconds <= 0) return;
@@ -88,10 +100,13 @@ export function SpeakingCoachScreen() {
               <li>
                 <span className="font-medium text-foreground">Exam style</span> — Timed, exam-like practice with less hand-holding. Use &quot;Start 3-min timer&quot; for a timed speaking slot.
               </li>
+              <li>
+                <span className="font-medium text-foreground">Debate</span> — The coach acts as a moderator: you get a motion, choose For or Against, then have prep time and a timed opening. You get argumentation feedback at the end.
+              </li>
             </ul>
           </PopoverContent>
         </Popover>
-        {(["explain", "gaps", "exam"] as const).map((m) => (
+        {(["explain", "gaps", "exam", "debate"] as const).map((m) => (
           <button
             key={m}
             type="button"
@@ -102,7 +117,7 @@ export function SpeakingCoachScreen() {
                 : "bg-muted text-muted-foreground hover:bg-muted/80"
             }`}
           >
-            {m === "explain" ? "Explain topics" : m === "gaps" ? "Teach back gaps" : "Exam style"}
+            {m === "explain" ? "Explain topics" : m === "gaps" ? "Teach back gaps" : m === "exam" ? "Exam style" : "Debate"}
           </button>
         ))}
         <button
@@ -115,6 +130,46 @@ export function SpeakingCoachScreen() {
             : "Start 3‑min timer"}
         </button>
       </div>
+
+      {mode === "debate" && (
+        <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-4">
+          <label className="block text-sm font-medium text-foreground">
+            Motion (topic to argue)
+          </label>
+          <input
+            type="text"
+            value={debateMotion}
+            onChange={(e) => setDebateMotion(e.target.value)}
+            placeholder="e.g. This house believes that practice makes perfect."
+            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm text-muted-foreground">Your side:</span>
+            <button
+              type="button"
+              onClick={() => setDebateSide("for")}
+              className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                debateSide === "for"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              For
+            </button>
+            <button
+              type="button"
+              onClick={() => setDebateSide("against")}
+              className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                debateSide === "against"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              Against
+            </button>
+          </div>
+        </div>
+      )}
 
       <SpeakingCoach
         coachContext={coachContext ?? undefined}

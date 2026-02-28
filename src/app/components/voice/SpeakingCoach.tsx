@@ -73,6 +73,10 @@ export function SpeakingCoach({
           knowledgeGaps: coachContext?.knowledgeGaps,
           studyPlan: coachContext?.studyPlan,
           mode: coachMode,
+          ...(coachMode === "debate" && {
+            debateMotion: coachContext?.debateMotion,
+            debateSide: coachContext?.debateSide,
+          }),
         }),
       });
       const data = (await res.json()) as { message?: string };
@@ -206,6 +210,29 @@ export function SpeakingCoach({
       }
     },
   });
+
+  // Request next coach reply only after user has spoken (non-debate): debounce ~2s after final transcript
+  useEffect(() => {
+    if (
+      coachMode === "debate" ||
+      !conversationActive ||
+      conversation.status !== "connected" ||
+      !userTranscript.trim()
+    ) {
+      return;
+    }
+    const t = setTimeout(() => {
+      if (!userTranscriptRef.current.trim()) return;
+      conversation.requestCoachReply();
+    }, 2000);
+    return () => clearTimeout(t);
+  }, [
+    userTranscript,
+    conversationActive,
+    conversation.status,
+    coachMode,
+    conversation.requestCoachReply,
+  ]);
 
   async function startConversation() {
     if (isStarting || conversationActive) return;
