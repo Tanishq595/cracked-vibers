@@ -485,7 +485,7 @@ export function Dashboard() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 + index * 0.1 }}
               whileHover={{ scale: 1.03, y: -6 }}
-              className="relative overflow-hidden rounded-2xl bg-card border border-slate-200 p-6 hover:border-[#ffb347]/50 transition-all group cursor-pointer shadow-sm"
+              className="relative overflow-hidden rounded-2xl bg-card border border-slate-200 p-6 hover:border-[#ffb347]/50 transition-all group cursor-pointer shadow-sm flex flex-col h-full"
             >
               {/* Progress Ring */}
               <div className="flex items-start gap-4 mb-4">
@@ -533,7 +533,7 @@ export function Dashboard() {
               <motion.button
                 whileHover={{ x: 4 }}
                 whileTap={{ scale: 0.95 }}
-                className={`w-full px-4 py-3 bg-gradient-to-r ${insight.bgGradient} text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg group-hover:shadow-xl transition-all`}
+                className={`w-full px-4 py-3 bg-gradient-to-r ${insight.bgGradient} text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg group-hover:shadow-xl transition-all mt-auto`}
               >
                 {insight.action}
                 <ArrowRight className="w-4 h-4" />
