@@ -26,13 +26,11 @@ export function Onboarding() {
   useEffect(() => {
     const youtube = searchParams.get('youtube');
     const googleClassroom = searchParams.get('google_classroom');
+    const notion = searchParams.get('notion');
     const updates: string[] = [];
-    if (youtube === 'connected') {
-      updates.push('youtube');
-    }
-    if (googleClassroom === 'connected') {
-      updates.push('classroom');
-    }
+    if (youtube === 'connected') updates.push('youtube');
+    if (googleClassroom === 'connected') updates.push('classroom');
+    if (notion === 'connected') updates.push('notion');
     if (updates.length > 0) {
       setConnected((prev) => {
         const next = [...prev];
@@ -46,6 +44,7 @@ export function Onboarding() {
         next.delete('youtube');
         next.delete('message');
         next.delete('google_classroom');
+        next.delete('notion');
         return next;
       }, { replace: true });
     }
@@ -74,6 +73,25 @@ export function Onboarding() {
     if (platform === 'classroom') {
       setConnecting('classroom');
       window.location.href = `/api/google-classroom-auth?returnTo=${encodeURIComponent('/onboarding')}`;
+      return;
+    }
+    if (platform === 'notion') {
+      setConnecting('notion');
+      try {
+        const token = await getToken();
+        const res = await fetch('/api/notion-auth?returnTo=' + encodeURIComponent('/onboarding'), {
+          method: 'GET',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        const data = await res.json();
+        if (res.ok && typeof data?.url === 'string') {
+          window.location.href = data.url;
+          return;
+        }
+      } catch {
+        // fall through
+      }
+      setConnecting(null);
       return;
     }
     setConnecting(platform);

@@ -74,7 +74,7 @@ const platforms: Array<{
   path?: string;
 }> = [
   { name: 'Google Classroom', icon: BookOpen, color: '#34A853', bgColor: 'bg-emerald-500/10', borderColor: 'border-emerald-500/30', status: 'synced', items: 142, path: '/dashboard/classroom' },
-  { name: 'Notion', icon: FileText, color: '#000000', bgColor: 'bg-slate-500/10', borderColor: 'border-slate-500/30', status: 'synced', items: 89 },
+  { name: 'Notion', icon: FileText, color: '#000000', bgColor: 'bg-slate-500/10', borderColor: 'border-slate-500/30', status: 'synced', items: 89, path: '/dashboard/notion' },
   { name: 'YouTube', icon: Youtube, color: '#FF0000', bgColor: 'bg-red-500/10', borderColor: 'border-red-500/30', status: 'synced', items: 0, path: '/dashboard/youtube' },
   { name: 'Canvas', icon: Circle, color: '#E13F2F', bgColor: 'bg-orange-500/10', borderColor: 'border-orange-500/30', status: 'syncing', items: 67 },
 ];
@@ -195,6 +195,8 @@ export function Dashboard() {
   const [youtubeConnected, setYoutubeConnected] = useState<boolean | null>(null);
   const [classroomCourseCount, setClassroomCourseCount] = useState<number | null>(null);
   const [classroomConnected, setClassroomConnected] = useState<boolean | null>(null);
+  const [notionPageCount, setNotionPageCount] = useState<number | null>(null);
+  const [notionConnected, setNotionConnected] = useState<boolean | null>(null);
   const [insightCards, setInsightCards] = useState<Array<{ title: string; subtitle: string; progress: number; synthesisId?: string }>>([]);
   const [insightsLoading, setInsightsLoading] = useState(true);
   const [insightsError, setInsightsError] = useState(false);
@@ -320,6 +322,32 @@ export function Dashboard() {
       });
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    getToken()
+      .then((token) => {
+        if (!token) {
+          setNotionConnected(false);
+          return;
+        }
+        return fetch('/api/notion-data', { method: 'GET', headers: { Authorization: `Bearer ${token}` } });
+      })
+      .then((res) => (res?.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        setNotionConnected(data?.connected === true);
+        const pages = Array.isArray(data?.pages) ? data.pages : [];
+        setNotionPageCount(data?.connected ? pages.length : 0);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setNotionConnected(false);
+          setNotionPageCount(0);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [getToken]);
 
   useEffect(() => {
     if (userId === null) return;
@@ -734,9 +762,11 @@ export function Dashboard() {
                           ? youtubeConnected
                           : platform.name === 'Google Classroom'
                             ? classroomConnected
-                            : platform.status === 'synced';
+                            : platform.name === 'Notion'
+                              ? notionConnected
+                              : platform.status === 'synced';
                         const isSynced = connected === true;
-                        const isChecking = connected === null && (platform.name === 'YouTube' || platform.name === 'Google Classroom');
+                        const isChecking = connected === null && (platform.name === 'YouTube' || platform.name === 'Google Classroom' || platform.name === 'Notion');
                         return (
                           <>
                             <div className={`w-2 h-2 rounded-full ${
@@ -763,7 +793,11 @@ export function Dashboard() {
                         ? classroomCourseCount !== null
                           ? `${classroomCourseCount} course${classroomCourseCount !== 1 ? 's' : ''}`
                           : '… courses'
-                        : `${platform.items} items`}
+                        : platform.name === 'Notion'
+                          ? notionPageCount !== null
+                            ? `${notionPageCount} page${notionPageCount !== 1 ? 's' : ''}`
+                            : '… pages'
+                          : `${platform.items} items`}
                   </p>
                 </div>
               </motion.div>

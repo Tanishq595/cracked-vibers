@@ -19,6 +19,7 @@ import {
   FolderOpen,
   Mic,
   Trophy,
+  FileText,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -42,6 +43,7 @@ export function Layout() {
   const { getToken } = useAuth();
   const [youtubeConnected, setYoutubeConnected] = useState<boolean | null>(null);
   const [classroomConnected, setClassroomConnected] = useState<boolean | null>(null);
+  const [notionConnected, setNotionConnected] = useState<boolean | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -78,8 +80,29 @@ export function Layout() {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    getToken()
+      .then((token) => {
+        if (!token) {
+          setNotionConnected(false);
+          return;
+        }
+        return fetch('/api/notion-data', { method: 'GET', headers: { Authorization: `Bearer ${token}` } });
+      })
+      .then((res) => (res?.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        setNotionConnected(data?.connected === true);
+      })
+      .catch(() => {
+        if (!cancelled) setNotionConnected(false);
+      });
+    return () => { cancelled = true; };
+  }, [getToken]);
+
   const platformsSyncedCount =
-    (youtubeConnected === true ? 1 : 0) + (classroomConnected === true ? 1 : 0);
+    (youtubeConnected === true ? 1 : 0) + (classroomConnected === true ? 1 : 0) + (notionConnected === true ? 1 : 0);
 
   const handleSignOut = () => {
     setProfileOpen(false);
@@ -267,9 +290,20 @@ export function Layout() {
                   className="w-5 h-5 object-contain"
                 />
               </Link>
+              <Link
+                to="/dashboard/notion"
+                className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center overflow-hidden hover:ring-2 hover:ring-slate-500/50 transition-all shrink-0 ${
+                  notionConnected === true
+                    ? 'border-slate-500/50 bg-slate-500/10'
+                    : 'border-sidebar-border bg-card opacity-70'
+                }`}
+                title={notionConnected === true ? 'Notion connected' : 'Notion'}
+              >
+                <FileText className="w-5 h-5 text-slate-700" />
+              </Link>
             </div>
             <span className="text-sm text-sidebar-foreground font-semibold">
-              {youtubeConnected === null && classroomConnected === null
+              {youtubeConnected === null && classroomConnected === null && notionConnected === null
                 ? '… synced'
                 : `${platformsSyncedCount} synced`}
             </span>

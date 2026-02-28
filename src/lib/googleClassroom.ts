@@ -13,8 +13,13 @@ export async function getCourses(accessToken: string) {
   try {
     const response = await classroom.courses.list({});
     return response.data.courses || [];
-  } catch (error) {
-    console.error('Failed to get courses:', error);
+  } catch (error: unknown) {
+    const status = (error as { code?: number })?.code ?? (error as { response?: { status?: number } })?.response?.status;
+    if (status === 401) {
+      console.warn('[googleClassroom] getCourses: token invalid or expired (401)');
+    } else {
+      console.error('Failed to get courses:', error);
+    }
     return [];
   }
 }

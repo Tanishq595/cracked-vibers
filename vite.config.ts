@@ -40,6 +40,13 @@ import canvasCallbackHandler from './api/canvas-callback'
 import googleClassroomAuthHandler from './api/google-classroom-auth'
 import googleClassroomAuthCallbackHandler from './api/google-classroom-auth-callback'
 import googleClassroomDataHandler from './api/google-classroom-data'
+import notionAuthHandler from './api/notion-auth'
+import notionAuthCallbackHandler from './api/notion-auth-callback'
+import notionDataHandler from './api/notion-data'
+import notionQueryDatabaseHandler from './api/notion-query-database'
+import notionCreatePageHandler from './api/notion-create-page'
+import notionUpdatePageHandler from './api/notion-update-page'
+import notionAppendBlocksHandler from './api/notion-append-blocks'
 import speakingAssessmentsListHandler from './api/speaking-assessments-list'
 import speakingAssessmentDetailHandler from './api/speaking-assessment-detail'
 import speakingSessionCompleteHandler from './api/speaking-session-complete'
@@ -113,6 +120,13 @@ const API_HANDLERS: Record<string, (req: Connect.IncomingMessage, res: Connect.S
   '/api/google-classroom-auth': runVercelHandlerGetWithRedirect(googleClassroomAuthHandler),
   '/api/google-classroom-auth/callback': runVercelHandlerGetWithRedirect(googleClassroomAuthCallbackHandler),
   '/api/google-classroom-data': runVercelHandlerGet(googleClassroomDataHandler),
+  '/api/notion-auth': runVercelHandlerGet(notionAuthHandler),
+  '/api/notion-auth/callback': runVercelHandlerGetWithRedirect(notionAuthCallbackHandler),
+  '/api/notion-data': runVercelHandlerGet(notionDataHandler),
+  '/api/notion-query-database': runVercelHandlerGet(notionQueryDatabaseHandler),
+  '/api/notion-create-page': runVercelHandlerWithBody(notionCreatePageHandler),
+  '/api/notion-update-page': runVercelHandlerWithBody(notionUpdatePageHandler),
+  '/api/notion-append-blocks': runVercelHandlerWithBody(notionAppendBlocksHandler),
   '/api/speaking-assessments-list': runVercelHandlerGet(speakingAssessmentsListHandler),
   '/api/speaking-assessment-detail': runVercelHandlerGet(speakingAssessmentDetailHandler),
   '/api/speaking-session-complete': runVercelHandlerWithBody(speakingSessionCompleteHandler),
