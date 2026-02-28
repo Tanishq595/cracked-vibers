@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router';
+import { useAuth } from '@clerk/clerk-react';
 import { 
   CheckCircle2, 
   Youtube, 
@@ -13,11 +14,31 @@ import {
   Sparkles
 } from 'lucide-react';
 
+const API_BASE = import.meta.env.VITE_API_URL ?? '';
+
 export function Onboarding() {
   const [step, setStep] = useState(1);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [connected, setConnected] = useState<string[]>([]);
   const navigate = useNavigate();
+  const { isLoaded, isSignedIn, getToken } = useAuth();
+  const syncedRef = useRef(false);
+
+  // Sync signed-in user to app_users as soon as they land on onboarding (right after signup)
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || syncedRef.current) return;
+    syncedRef.current = true;
+    getToken()
+      .then((token) => {
+        if (!token) return;
+        return fetch(`${API_BASE}/api/init-user`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          credentials: 'include',
+        });
+      })
+      .catch((err) => console.warn('init-user sync failed:', err));
+  }, [isLoaded, isSignedIn, getToken]);
 
   const handleConnect = (platform: string) => {
     setConnecting(platform);

@@ -1,5 +1,6 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router';
 import { useState } from 'react';
+import { useClerk, useUser } from '@clerk/clerk-react';
 import { 
   LayoutDashboard, 
   Search, 
@@ -34,8 +35,15 @@ const platforms = [
 export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { signOut } = useClerk();
+  const { user } = useUser();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+
+  const handleSignOut = () => {
+    setProfileOpen(false);
+    signOut(() => navigate('/login'));
+  };
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 overflow-hidden">
@@ -190,14 +198,16 @@ export function Layout() {
                 className="flex items-center gap-3 px-4 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl cursor-pointer transition-all border border-slate-100"
               >
                 <div className="text-right hidden md:block">
-                  <div className="text-sm font-semibold text-slate-900">Tara</div>
+                  <div className="text-sm font-semibold text-slate-900">
+                    {user?.firstName || user?.username || 'User'}
+                  </div>
                   <div className="text-xs text-slate-500 flex items-center gap-1 font-medium">
                     <Flame className="w-3.5 h-3.5 text-orange-500" />
                     12 day streak
                   </div>
                 </div>
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-600 to-blue-600 flex items-center justify-center text-lg font-bold text-white shadow-md">
-                  T
+                  {(user?.firstName?.[0] || user?.username?.[0] || 'U').toUpperCase()}
                 </div>
               </motion.div>
 
@@ -211,10 +221,7 @@ export function Layout() {
                     className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border-2 border-slate-200 overflow-hidden z-50"
                   >
                     <button
-                      onClick={() => {
-                        setProfileOpen(false);
-                        navigate('/login');
-                      }}
+                      onClick={handleSignOut}
                       className="w-full flex items-center gap-3 px-4 py-3 text-slate-600 hover:text-red-600 hover:bg-red-50 transition-all"
                     >
                       <LogOut className="w-5 h-5" />
