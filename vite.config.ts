@@ -8,12 +8,14 @@ import initUserHandler from './api/init-user'
 import dbTestHandler from './api/db-test'
 import meHandler from './api/me'
 import healthHandler from './api/health'
+import storageUploadUrlHandler from './api/storage-upload-url'
 
 const API_HANDLERS: Record<string, (req: Connect.IncomingMessage, res: Connect.ServerResponse) => Promise<void>> = {
   '/api/init-user': runVercelHandler(initUserHandler),
   '/api/db-test': runVercelHandler(dbTestHandler),
   '/api/me': runVercelHandler(meHandler),
   '/api/health': runVercelHandler(healthHandler),
+  '/api/storage-upload-url': runVercelHandler(storageUploadUrlHandler),
 }
 
 function runVercelHandler(
