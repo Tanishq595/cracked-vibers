@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useUser } from "@clerk/clerk-react";
 import ReactMarkdown from "react-markdown";
 import { useLocation, useNavigate } from "react-router";
@@ -260,7 +260,12 @@ export function Synthesize() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const location = useLocation() as {
-    state?: { materialsFromLibrary?: string } | null;
+    state?: {
+      materialsFromLibrary?: string;
+      fromGaps?: boolean;
+      gapDescription?: string;
+      topicsFromGaps?: Topic[];
+    } | null;
   };
   const navigate = useNavigate();
 
@@ -288,6 +293,7 @@ export function Synthesize() {
   const [videoLoading, setVideoLoading] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
   const [materialsTruncated, setMaterialsTruncated] = useState(false);
+  const gapQuestionsTriggeredRef = useRef(false);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -303,6 +309,17 @@ export function Synthesize() {
     const fromLibrary = location.state?.materialsFromLibrary;
     if (fromLibrary && !materials.trim()) {
       setMaterials(fromLibrary);
+    }
+    if (
+      location.state?.fromGaps &&
+      location.state.topicsFromGaps &&
+      !gapQuestionsTriggeredRef.current
+    ) {
+      gapQuestionsTriggeredRef.current = true;
+      void generateGapQuestionSet(
+        location.state.topicsFromGaps,
+        location.state.gapDescription,
+      );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state]);
@@ -432,6 +449,64 @@ export function Synthesize() {
       void loadHistory(user?.id ?? "");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
+      setSynthLoading(false);
+    }
+  }
+
+  async function generateGapQuestionSet(topicsForGap: Topic[], gapDescription?: string) {
+    if (!topicsForGap || topicsForGap.length === 0) {
+      setError("No topics available for this gap. Try regenerating the synthesis first.");
+      return;
+    }
+    setError(null);
+    setSynthesis(null);
+    setTopics(topicsForGap);
+    setAudioUrl(null);
+    setCurrentSet(null);
+    setVideoUrl(null);
+    setVideoTaskId(null);
+    setVideoError(null);
+    setSynthLoading(true);
+    try {
+      const qRes = await fetch("/api/questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topics: topicsForGap,
+          count: 10,
+        }),
+      });
+      const qData = await qRes.json();
+      if (!qRes.ok) throw new Error(qData.error ?? "Failed to generate questions");
+      const generatedQuestions = Array.isArray(qData.questions) ? qData.questions : [];
+      if (generatedQuestions.length === 0) throw new Error("No questions generated");
+
+      const setId = `gap-set-${Date.now()}`;
+      const name =
+        gapDescription && gapDescription.trim().length > 0
+          ? `Gap practice – ${gapDescription.trim().slice(0, 80)}`
+          : `Gap practice ${new Date().toLocaleDateString()}`;
+
+      const set: QuestionSet = {
+        id: setId,
+        name,
+        questions: generatedQuestions,
+        topics: topicsForGap,
+        createdAt: new Date().toISOString(),
+        flashcardKnown: {},
+      };
+
+      setCurrentSet(set);
+      if (user?.id) {
+        const next = [set, ...savedSets.filter((s) => s.id !== set.id)].slice(0, 20);
+        setSavedSets(next);
+        saveSets(user.id, next);
+      }
+      setFlashcardIndex(0);
+      setFlashcardFlipped(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong while generating gap questions");
     } finally {
       setSynthLoading(false);
     }
