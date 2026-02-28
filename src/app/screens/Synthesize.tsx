@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useUser } from "@clerk/clerk-react";
 import ReactMarkdown from "react-markdown";
 import { useLocation, useNavigate } from "react-router";
@@ -11,6 +11,8 @@ import {
 } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
 import { cn } from "../components/ui/utils";
 import { KnowledgeGraph } from "../components/KnowledgeGraph";
 import {
@@ -20,14 +22,170 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "../components/ui/dialog";
-import { FileText, Loader2 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
+import { FileText, Loader2, BookOpen, Layers, ChevronLeft, ChevronRight, Check, X, Video } from "lucide-react";
 
-const PLACEHOLDER = `Paste learning materials here (e.g. notes, transcript, textbook excerpt)...
+const STORAGE_KEY_PREFIX = "mustlearn_qsets_";
 
-Example:
-- Photosynthesis: light → chloroplasts → glucose + O2. Requires CO2 and H2O.
-- Cell division: mitosis (somatic) and meiosis (gametes). Chromosomes duplicate in S phase.
-- We didn't cover the Calvin cycle in detail.`;
+type Topic = { id: string; label: string };
+
+type Question = {
+  id: string;
+  topicId: string;
+  prompt: string;
+  type: "mcq" | "short";
+  options?: string[];
+  correctAnswer: string;
+  explanation: string;
+  difficulty?: "easy" | "medium" | "hard";
+};
+
+type QuestionSet = {
+  id: string;
+  name: string;
+  questions: Question[];
+  topics: Topic[];
+  createdAt: string;
+  flashcardKnown: Record<string, boolean>;
+};
+
+function loadSavedSets(userId: string): QuestionSet[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_PREFIX + userId);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as QuestionSet[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveSets(userId: string, sets: QuestionSet[]) {
+  try {
+    localStorage.setItem(STORAGE_KEY_PREFIX + userId, JSON.stringify(sets));
+  } catch {
+    // ignore
+  }
+}
+
+const PLACEHOLDER = `Optional: paste extra materials to combine with library files...`;
+
+function stripMarkdownBold(text: string): string {
+  if (!text || typeof text !== "string") return "";
+  return text.replace(/\*\*([^*]+)\*\*/g, "$1").trim();
+}
+
+function QuestionCard({
+  question,
+  topicLabel,
+}: {
+  question: Question;
+  topicLabel: string;
+}) {
+  const [selectedAnswer, setSelectedAnswer] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+
+  const isCorrect =
+    submitted &&
+    selectedAnswer.trim().length > 0 &&
+    (selectedAnswer.trim().toLowerCase() === question.correctAnswer.trim().toLowerCase() ||
+      question.correctAnswer.trim().toLowerCase().includes(selectedAnswer.trim().toLowerCase()) ||
+      selectedAnswer.trim().toLowerCase().includes(question.correctAnswer.trim().toLowerCase()));
+
+  const options = question.type === "mcq" && Array.isArray(question.options) ? question.options : [];
+
+  return (
+    <div
+      className={cn(
+        "rounded-xl border-2 border-slate-200 dark:border-slate-700 overflow-hidden",
+        "bg-slate-50/80 dark:bg-slate-900/40"
+      )}
+    >
+      <div className="p-4 space-y-4">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-sm font-semibold text-foreground flex-1">{stripMarkdownBold(question.prompt)}</p>
+          <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+            {question.type === "mcq" ? "MCQ" : "Short"} · {(question.difficulty ?? "medium")} · {topicLabel}
+          </span>
+        </div>
+
+        {!submitted ? (
+          <>
+            {question.type === "mcq" && options.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">Choose one:</p>
+                <ul className="space-y-2">
+                  {options.map((opt) => (
+                    <li key={opt}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedAnswer(opt)}
+                        className={cn(
+                          "w-full rounded-lg border-2 px-4 py-3 text-left text-sm transition-colors",
+                          selectedAnswer === opt
+                            ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-900 dark:text-emerald-100"
+                            : "border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500 bg-white dark:bg-slate-800"
+                        )}
+                      >
+                        {stripMarkdownBold(opt)}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">Your answer:</label>
+                <textarea
+                  value={selectedAnswer}
+                  onChange={(e) => setSelectedAnswer(e.target.value)}
+                  placeholder="Type your answer…"
+                  className="w-full min-h-[80px] rounded-lg border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm resize-y"
+                  disabled={submitted}
+                />
+              </div>
+            )}
+            <Button
+              size="sm"
+              onClick={() => setSubmitted(true)}
+              disabled={!selectedAnswer.trim()}
+              className="mt-2"
+            >
+              Submit answer
+            </Button>
+          </>
+        ) : (
+          <div className="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-700">
+            <p className="text-xs font-semibold text-muted-foreground">Your answer</p>
+            <p
+              className={cn(
+                "text-sm font-medium rounded-lg px-3 py-2",
+                isCorrect
+                  ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200"
+                  : "bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200"
+              )}
+            >
+              {selectedAnswer.trim() || "(none)"} {isCorrect ? "✓ Correct" : "✗"}
+            </p>
+            <p className="text-xs font-semibold text-muted-foreground">Correct answer</p>
+            <p className="text-sm font-medium text-foreground rounded-lg px-3 py-2 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-900 dark:text-emerald-100">
+              {stripMarkdownBold(question.correctAnswer)}
+            </p>
+            <p className="text-xs font-semibold text-muted-foreground mt-2">Explanation</p>
+            <p className="text-sm text-muted-foreground leading-relaxed">{stripMarkdownBold(question.explanation)}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function extractSection(markdown: string, header: string): string {
   const re = new RegExp(
@@ -55,26 +213,13 @@ function sectionLines(section: string): string[] {
     .filter((line) => line.length > 0);
 }
 
+type LibraryItem = {
+  key: string;
+  size: number;
+  lastModified: string | null;
+};
+
 export function Synthesize() {
-  type Topic = { id: string; label: string };
-
-  type Question = {
-    id: string;
-    topicId: string;
-    prompt: string;
-    type: "mcq" | "short";
-    options?: string[];
-    correctAnswer: string;
-    explanation: string;
-  };
-
-  type AnswerRecord = {
-    questionId: string;
-    topicId: string;
-    topicLabel: string;
-    correct: boolean;
-  };
-
   const { user } = useUser();
   const [materials, setMaterials] = useState("");
   const [synthesis, setSynthesis] = useState<{
@@ -86,13 +231,6 @@ export function Synthesize() {
   const [synthLoading, setSynthLoading] = useState(false);
   const [narrateLoading, setNarrateLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [practiceLoading, setPracticeLoading] = useState(false);
-  const [practiceError, setPracticeError] = useState<string | null>(null);
-  const [questions, setQuestions] = useState<Question[] | null>(null);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [currentAnswer, setCurrentAnswer] = useState("");
-  const [answers, setAnswers] = useState<AnswerRecord[]>([]);
-  const [sessionComplete, setSessionComplete] = useState(false);
   const [history, setHistory] = useState<
     { id: string; title: string; createdAt: string | null; topicLabels: string[] }[]
   >([]);
@@ -103,21 +241,30 @@ export function Synthesize() {
   };
   const navigate = useNavigate();
 
-  type LibraryItem = {
-    key: string;
-    size: number;
-    lastModified: string | null;
-  };
-
   const [libraryItems, setLibraryItems] = useState<LibraryItem[]>([]);
   const [libraryLoading, setLibraryLoading] = useState(false);
   const [libraryError, setLibraryError] = useState<string | null>(null);
   const [librarySelectedKeys, setLibrarySelectedKeys] = useState<string[]>([]);
   const [libraryAdding, setLibraryAdding] = useState(false);
 
+  const [currentSet, setCurrentSet] = useState<QuestionSet | null>(null);
+  const [savedSets, setSavedSets] = useState<QuestionSet[]>([]);
+  const [setName, setSetName] = useState("");
+  const [questionBankFilterTopic, setQuestionBankFilterTopic] = useState<string>("all");
+  const [questionBankFilterType, setQuestionBankFilterType] = useState<string>("all");
+  const [questionBankFilterDifficulty, setQuestionBankFilterDifficulty] = useState<string>("all");
+  const [flashcardIndex, setFlashcardIndex] = useState(0);
+  const [flashcardFlipped, setFlashcardFlipped] = useState(false);
+
+  const [videoTaskId, setVideoTaskId] = useState<string | null>(null);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoLoading, setVideoLoading] = useState(false);
+  const [videoError, setVideoError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!user?.id) return;
     void loadHistory(user.id);
+    setSavedSets(loadSavedSets(user.id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
@@ -126,38 +273,67 @@ export function Synthesize() {
     if (fromLibrary && !materials.trim()) {
       setMaterials(fromLibrary);
     }
-    // We deliberately don't clear location.state here; react-router v7 keeps it per navigation.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state]);
 
-  async function handleSynthesize() {
+  const getCombinedMaterials = useCallback(async (): Promise<string> => {
+    const parts: string[] = [];
+    if (librarySelectedKeys.length > 0) {
+      const selected = libraryItems.filter((it) => librarySelectedKeys.includes(it.key));
+      for (const item of selected) {
+        const name = item.key.split("/").pop() || item.key;
+        const res = await fetch("/api/storage-download-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ objectKey: item.key }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.url) continue;
+        const fileRes = await fetch(data.url as string);
+        const text = await fileRes.text();
+        if (text?.trim()) parts.push(`# Source: ${name}\n\n${text}`);
+      }
+    }
+    const fromLibrary = parts.join("\n\n---\n\n");
+    const extra = materials.trim();
+    if (fromLibrary && extra) return `${fromLibrary}\n\n---\n\n${extra}`;
+    if (fromLibrary) return fromLibrary;
+    return extra;
+  }, [libraryItems, librarySelectedKeys, materials]);
+
+  async function handleGenerateQuestionBank() {
+    const combined = await getCombinedMaterials();
+    if (!combined.trim()) {
+      setError("Select at least one file from Library or paste materials.");
+      return;
+    }
     setError(null);
     setSynthesis(null);
     setTopics([]);
     setAudioUrl(null);
-    setQuestions(null);
-    setAnswers([]);
-    setCurrentIndex(0);
-    setCurrentAnswer("");
-    setPracticeError(null);
-    setSessionComplete(false);
+    setCurrentSet(null);
+    setVideoUrl(null);
+    setVideoTaskId(null);
+    setVideoError(null);
     setSynthLoading(true);
     try {
       const res = await fetch("/api/synthesize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          materials,
+          materials: combined,
           userId: user?.id,
+          title: setName.trim() || undefined,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Synthesis failed");
+      const extractedTopics = Array.isArray(data.topics) ? data.topics : [];
       setSynthesis({
         markdown: data.markdown ?? "",
         knowledgeGraph: data.knowledgeGraph ?? null,
       });
-      setTopics(Array.isArray(data.topics) ? data.topics : []);
+      setTopics(extractedTopics);
 
       const studyPlanText = extractStudyPlanSection(data.markdown ?? "");
       if (studyPlanText) {
@@ -171,18 +347,168 @@ export function Synthesize() {
           const narrateData = await narrateRes.json();
           if (narrateRes.ok && narrateData.audioUrl) setAudioUrl(narrateData.audioUrl);
         } catch {
-          // Non-blocking: show synthesis even if narration fails
+          // no-op
         } finally {
           setNarrateLoading(false);
         }
       }
+
+      if (extractedTopics.length === 0) throw new Error("No topics extracted. Try different materials.");
+      const qRes = await fetch("/api/questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topics: extractedTopics,
+          count: 10,
+        }),
+      });
+      const qData = await qRes.json();
+      if (!qRes.ok) throw new Error(qData.error ?? "Failed to generate questions");
+      const generatedQuestions = Array.isArray(qData.questions) ? qData.questions : [];
+      if (generatedQuestions.length === 0) throw new Error("No questions generated");
+
+      const setId = `set-${Date.now()}`;
+      const set: QuestionSet = {
+        id: setId,
+        name: setName.trim() || `Question set ${new Date().toLocaleDateString()}`,
+        questions: generatedQuestions,
+        topics: extractedTopics,
+        createdAt: new Date().toISOString(),
+        flashcardKnown: {},
+      };
+      setCurrentSet(set);
       if (user?.id) {
-        void loadHistory(user.id);
+        const next = [set, ...savedSets.filter((s) => s.id !== set.id)].slice(0, 20);
+        setSavedSets(next);
+        saveSets(user.id, next);
       }
+      setFlashcardIndex(0);
+      setFlashcardFlipped(false);
+      void loadHistory(user?.id ?? "");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
       setSynthLoading(false);
+    }
+  }
+
+  function loadSet(set: QuestionSet) {
+    setCurrentSet(set);
+    setFlashcardIndex(0);
+    setFlashcardFlipped(false);
+  }
+
+  function setFlashcardKnown(questionId: string, known: boolean) {
+    if (!currentSet || !user?.id) return;
+    const nextKnown = { ...currentSet.flashcardKnown, [questionId]: known };
+    const updated: QuestionSet = { ...currentSet, flashcardKnown: nextKnown };
+    setCurrentSet(updated);
+    const next = savedSets.map((s) => (s.id === updated.id ? updated : s));
+    setSavedSets(next);
+    saveSets(user.id, next);
+  }
+
+  function buildVideoPromptFromSynthesis(): string {
+    if (!synthesis?.markdown) return "";
+    const baseMd = stripKnowledgeGraphSection(synthesis.markdown);
+    const topicsMd = extractSection(baseMd, "Topics");
+    const planMd = extractSection(baseMd, "Study Plan");
+    const topicLines = sectionLines(topicsMd);
+    const planLines = sectionLines(planMd);
+    const topicList = topicLines.slice(0, 8).join(", ");
+    const planList = planLines.slice(0, 5).join(". ");
+    const raw = `Educational explainer video. Topics: ${topicList}. Study plan: ${planList}. Clean, modern, professional style.`;
+    return raw.slice(0, 2000);
+  }
+
+  async function handleGenerateVideo() {
+    setVideoError(null);
+    setVideoUrl(null);
+    setVideoLoading(true);
+    try {
+      let markdown = synthesis?.markdown ?? "";
+      let extractedTopics = topics;
+
+      if (!markdown || extractedTopics.length === 0) {
+        const combined = await getCombinedMaterials();
+        if (!combined.trim()) {
+          setVideoError("Select at least one file from Library or paste materials.");
+          return;
+        }
+        const res = await fetch("/api/synthesize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            materials: combined,
+            userId: user?.id,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Synthesis failed");
+        markdown = data.markdown ?? "";
+        extractedTopics = Array.isArray(data.topics) ? data.topics : [];
+        setSynthesis({
+          markdown,
+          knowledgeGraph: data.knowledgeGraph ?? null,
+        });
+        setTopics(extractedTopics);
+      }
+
+      const baseMd = stripKnowledgeGraphSection(markdown);
+      const topicsMd = extractSection(baseMd, "Topics");
+      const planMd = extractSection(baseMd, "Study Plan");
+      const topicLines = sectionLines(topicsMd);
+      const planLines = sectionLines(planMd);
+      const topicList = topicLines.slice(0, 8).join(", ");
+      const planList = planLines.slice(0, 5).join(". ");
+      const prompt = `Educational explainer video. Topics: ${topicList}. Study plan: ${planList}. Clean, modern, professional style.`.slice(0, 2000);
+
+      if (!prompt.trim()) {
+        setVideoError("No synthesis content to turn into a video.");
+        return;
+      }
+
+      const createRes = await fetch("/api/video", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      });
+      const createData = (await createRes.json()) as { task_id?: string; error?: string };
+      if (!createRes.ok) {
+        throw new Error(createData.error ?? "Failed to start video generation");
+      }
+      const taskId = createData.task_id;
+      if (!taskId) {
+        throw new Error("No task ID returned");
+      }
+      setVideoTaskId(taskId);
+
+      const maxAttempts = 80;
+      const intervalMs = 3000;
+      for (let i = 0; i < maxAttempts; i++) {
+        const queryRes = await fetch(`/api/video?task_id=${encodeURIComponent(taskId)}`);
+        const queryData = (await queryRes.json()) as {
+          status?: string;
+          video_url?: string;
+          error?: string;
+        };
+        if (queryData.status === "success" && queryData.video_url) {
+          setVideoUrl(queryData.video_url);
+          setVideoTaskId(null);
+          return;
+        }
+        if (queryData.status === "fail") {
+          throw new Error(queryData.error ?? "Video generation failed");
+        }
+        await new Promise((r) => setTimeout(r, intervalMs));
+      }
+      throw new Error("Video generation timed out");
+    } catch (e) {
+      setVideoError(e instanceof Error ? e.message : "Failed to generate video");
+      setVideoUrl(null);
+      setVideoTaskId(null);
+    } finally {
+      setVideoLoading(false);
     }
   }
 
@@ -224,13 +550,10 @@ export function Synthesize() {
         knowledgeGraph: (data.knowledgeGraph ?? null) as Record<string, unknown> | null,
       });
       setTopics(Array.isArray(data.topics) ? data.topics : []);
-      setQuestions(null);
-      setAnswers([]);
-      setCurrentIndex(0);
-      setCurrentAnswer("");
-      setPracticeError(null);
-      setSessionComplete(false);
       setAudioUrl(null);
+      setVideoUrl(null);
+      setVideoTaskId(null);
+      setVideoError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load synthesis");
     } finally {
@@ -280,132 +603,17 @@ export function Synthesize() {
     );
   }
 
-  async function importFromLibrary() {
-    if (!librarySelectedKeys.length) return;
-    setLibraryAdding(true);
-    try {
-      const selected = libraryItems.filter((it) =>
-        librarySelectedKeys.includes(it.key)
-      );
-      const parts: string[] = [];
-      for (const item of selected) {
-        const name = item.key.split("/").pop() || item.key;
-        const res = await fetch("/api/storage-download-url", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ objectKey: item.key }),
-        });
-        const data = await res.json();
-        if (!res.ok || !data.url) continue;
-        const fileRes = await fetch(data.url as string);
-        const text = await fileRes.text();
-        if (text && text.trim().length > 0) {
-          parts.push(`# Source: ${name}\n\n${text}`);
-        }
-      }
-      const combined = parts.join("\n\n---\n\n");
-      if (!combined.trim()) {
-        setLibraryError("Could not read selected files as text.");
-        return;
-      }
-      setMaterials((prev) =>
-        prev.trim().length ? `${prev.trim()}\n\n---\n\n${combined}` : combined
-      );
-    } catch (e) {
-      setLibraryError(
-        e instanceof Error ? e.message : "Failed to import from library"
-      );
-    } finally {
-      setLibraryAdding(false);
-    }
-  }
-
-  async function startPractice() {
-    if (!synthesis || !topics.length) return;
-    setPracticeError(null);
-    setPracticeLoading(true);
-    setQuestions(null);
-    setAnswers([]);
-    setCurrentIndex(0);
-    setCurrentAnswer("");
-    setSessionComplete(false);
-
-    try {
-      const res = await fetch("/api/questions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          topics: topics,
-          count: 3,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to generate questions");
-      if (!Array.isArray(data.questions) || data.questions.length === 0) {
-        throw new Error("No questions generated");
-      }
-      setQuestions(data.questions);
-      setCurrentIndex(0);
-      setCurrentAnswer("");
-    } catch (e) {
-      setPracticeError(e instanceof Error ? e.message : "Failed to start practice");
-    } finally {
-      setPracticeLoading(false);
-    }
-  }
-
-  function handleSubmitAnswer() {
-    if (!questions || !questions[currentIndex]) return;
-    const q = questions[currentIndex];
-    const normalizedUser = currentAnswer.trim().toLowerCase();
-    const normalizedCorrect = q.correctAnswer.trim().toLowerCase();
-    const isCorrect =
-      normalizedUser.length > 0 &&
-      (normalizedUser === normalizedCorrect ||
-        normalizedCorrect.includes(normalizedUser) ||
-        normalizedUser.includes(normalizedCorrect));
-
-    const topicLabel =
-      topics.find((t) => t.id === q.topicId)?.label ?? q.topicId;
-
-    const record: AnswerRecord = {
-      questionId: q.id,
-      topicId: q.topicId,
-      topicLabel,
-      correct: isCorrect,
-    };
-
-    setAnswers((prev) => [...prev, record]);
-
-    const nextIndex = currentIndex + 1;
-    if (nextIndex >= questions.length) {
-      setSessionComplete(true);
-      void finalizeSession([...answers, record]);
-    } else {
-      setCurrentIndex(nextIndex);
-      setCurrentAnswer("");
-    }
-  }
-
-  async function finalizeSession(allAnswers: AnswerRecord[]) {
-    if (!user?.id || !allAnswers.length) return;
-    try {
-      await fetch("/api/mastery-update", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: user.id,
-          results: allAnswers.map((a) => ({
-            topicId: a.topicId,
-            topicLabel: a.topicLabel,
-            correct: a.correct,
-          })),
-        }),
-      });
-    } catch {
-      // Non-blocking: mastery is a nice-to-have for demo
-    }
-  }
+  const filteredQuestions = currentSet
+    ? currentSet.questions.filter((q) => {
+        if (questionBankFilterTopic !== "all" && q.topicId !== questionBankFilterTopic) return false;
+        if (questionBankFilterType !== "all" && q.type !== questionBankFilterType) return false;
+        if (questionBankFilterDifficulty !== "all" && (q.difficulty ?? "medium") !== questionBankFilterDifficulty)
+          return false;
+        return true;
+      })
+    : [];
+  const flashcardList = currentSet ? currentSet.questions : [];
+  const currentFlashcard = flashcardList[flashcardIndex];
 
   return (
     <div className="mx-auto max-w-4xl space-y-8 py-8">
@@ -414,17 +622,17 @@ export function Synthesize() {
           M.U.S.T.Learn
         </h1>
         <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-          Paste materials → get unified synthesis, gap analysis, and a study plan. Listen to the plan.
+          Choose materials from your library → generate a topic-sorted question bank and flashcards. Browse, filter, and practice.
         </p>
       </div>
 
       <Card>
         <CardHeader>
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <CardTitle>Learning materials</CardTitle>
               <CardDescription>
-                Combined text from Classroom, Notion, YouTube, or manual paste
+                Select one or more files from your library. We’ll combine their content to generate questions and flashcards.
               </CardDescription>
             </div>
             <Dialog>
@@ -432,15 +640,15 @@ export function Synthesize() {
                 <button
                   type="button"
                   onClick={() => void loadLibrary()}
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm hover:border-[#ffb347] hover:bg-[#ffb347]/5"
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm hover:border-[#ffb347] hover:bg-[#ffb347]/5 dark:border-slate-700 dark:bg-slate-900"
                 >
                   <FileText className="w-4 h-4" />
-                  Import from Library
+                  Choose from Library
                 </button>
               </DialogTrigger>
               <DialogContent className="max-w-3xl">
                 <DialogHeader>
-                  <DialogTitle>Select files to import</DialogTitle>
+                  <DialogTitle>Select materials</DialogTitle>
                 </DialogHeader>
                 <div className="mt-2 space-y-3">
                   {libraryError && (
@@ -454,8 +662,7 @@ export function Synthesize() {
                   )}
                   {!libraryLoading && libraryItems.length === 0 && !libraryError && (
                     <p className="text-xs text-zinc-500">
-                      No files in your library yet. Upload from the Library page
-                      first.
+                      No files in your library yet. Upload from the Library page first.
                     </p>
                   )}
                   {!libraryLoading && libraryItems.length > 0 && (
@@ -478,65 +685,289 @@ export function Synthesize() {
                               onChange={() => toggleLibrarySelected(item.key)}
                               className="h-4 w-4 rounded border-slate-300 text-[#ffb347] focus:ring-[#ffb347]"
                             />
-                            <FileText className="w-4 h-4 text-slate-500" />
+                            <FileText className="w-4 h-4 text-slate-500 shrink-0" />
                             <div className="min-w-0 flex-1">
-                              <p className="truncate font-medium text-foreground">
-                                {name}
-                              </p>
-                              <p className="truncate text-[11px] text-zinc-500">
-                                {last}
-                              </p>
+                              <p className="truncate font-medium text-foreground">{name}</p>
+                              <p className="truncate text-[11px] text-zinc-500">{last}</p>
                             </div>
                           </li>
                         );
                       })}
                     </ul>
                   )}
-                  <div className="flex justify-end">
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={importFromLibrary}
-                      disabled={
-                        !librarySelectedKeys.length || libraryAdding || libraryLoading
-                      }
-                    >
-                      {libraryAdding ? "Adding…" : "Add selected to editor"}
-                    </Button>
-                  </div>
                 </div>
               </DialogContent>
             </Dialog>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Textarea
-            placeholder={PLACEHOLDER}
-            value={materials}
-            onChange={(e) => setMaterials(e.target.value)}
-            className="min-h-[180px] resize-y font-mono text-sm"
-            disabled={synthLoading}
-          />
-          <Button
-            onClick={handleSynthesize}
-            disabled={synthLoading || !materials.trim()}
-            className="w-full sm:w-auto"
-          >
-            {synthLoading ? (
-              <span className="flex items-center gap-2">
-                <span
-                  className={cn(
-                    "size-4 animate-spin rounded-full border-2 border-current border-t-transparent"
-                  )}
-                />
-                Synthesizing…
-              </span>
-            ) : (
-              "Synthesize Learning Materials"
-            )}
-          </Button>
+          <div className="space-y-2">
+            <Label htmlFor="set-name" className="text-xs text-muted-foreground">
+              Optional: name this set
+            </Label>
+            <Input
+              id="set-name"
+              placeholder="e.g. Biology Ch. 1–3"
+              value={setName}
+              onChange={(e) => setSetName(e.target.value)}
+              className="max-w-sm"
+              disabled={synthLoading}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">Or paste extra materials to combine</Label>
+            <Textarea
+              placeholder={PLACEHOLDER}
+              value={materials}
+              onChange={(e) => setMaterials(e.target.value)}
+              className="min-h-[100px] resize-y font-mono text-sm"
+              disabled={synthLoading}
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              onClick={() => void handleGenerateQuestionBank()}
+              disabled={synthLoading || videoLoading || (librarySelectedKeys.length === 0 && !materials.trim())}
+              className="w-full sm:w-auto"
+            >
+              {synthLoading ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Generating…
+                </span>
+              ) : (
+                "Generate question bank & flashcards"
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => void handleGenerateVideo()}
+              disabled={synthLoading || videoLoading || (librarySelectedKeys.length === 0 && !materials.trim())}
+              className="inline-flex items-center gap-2"
+            >
+              {videoLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Generating video…
+                </>
+              ) : (
+                <>
+                  <Video className="w-4 h-4" />
+                  Generate video
+                </>
+              )}
+            </Button>
+          </div>
         </CardContent>
       </Card>
+
+      {savedSets.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Saved question sets</CardTitle>
+            <CardDescription>Load a set to browse the question bank or practice flashcards.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2">
+              {savedSets.map((set) => (
+                <li key={set.id}>
+                  <button
+                    type="button"
+                    onClick={() => loadSet(set)}
+                    className={cn(
+                      "flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition-colors",
+                      currentSet?.id === set.id
+                        ? "border-[#ffb347] bg-[#ffb347]/10"
+                        : "border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+                    )}
+                  >
+                    <span className="font-medium text-foreground">{set.name}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {set.questions.length} questions · {new Date(set.createdAt).toLocaleDateString()}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      {currentSet && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{currentSet.name}</CardTitle>
+            <CardDescription>
+              Topic-sorted question bank and flashcards from your materials.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Tabs defaultValue="question-bank" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="question-bank" className="flex items-center gap-2">
+                  <BookOpen className="w-4 h-4" />
+                  Question bank
+                </TabsTrigger>
+                <TabsTrigger value="flashcards" className="flex items-center gap-2">
+                  <Layers className="w-4 h-4" />
+                  Flashcards
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="question-bank" className="mt-4 space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  <Select value={questionBankFilterTopic} onValueChange={setQuestionBankFilterTopic}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Topic" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All topics</SelectItem>
+                      {currentSet.topics.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={questionBankFilterType} onValueChange={setQuestionBankFilterType}>
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue placeholder="Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All types</SelectItem>
+                      <SelectItem value="mcq">MCQ</SelectItem>
+                      <SelectItem value="short">Short answer</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={questionBankFilterDifficulty} onValueChange={setQuestionBankFilterDifficulty}>
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue placeholder="Difficulty" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="easy">Easy</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="hard">Hard</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                  {filteredQuestions.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No questions match the filters.</p>
+                  ) : (
+                    filteredQuestions.map((q) => {
+                      const topicLabel = currentSet.topics.find((t) => t.id === q.topicId)?.label ?? q.topicId;
+                      return (
+                        <QuestionCard key={q.id} question={q} topicLabel={topicLabel} />
+                      );
+                    })
+                  )}
+                </div>
+              </TabsContent>
+              <TabsContent value="flashcards" className="mt-4 space-y-4">
+                {flashcardList.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No cards in this set.</p>
+                ) : (
+                  <>
+                    <div
+                      className="cursor-pointer min-h-[220px] w-full"
+                      style={{ perspective: "1000px" }}
+                      onClick={() => setFlashcardFlipped((f) => !f)}
+                    >
+                      <div
+                        className="relative w-full h-full min-h-[220px] transition-transform duration-500"
+                        style={{
+                          transformStyle: "preserve-3d",
+                          transform: flashcardFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
+                        }}
+                      >
+                        <div
+                          className="absolute inset-0 rounded-2xl border-2 border-emerald-300 dark:border-emerald-600 bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950/80 dark:to-emerald-900/90 shadow-lg flex flex-col items-center justify-center gap-4 p-8"
+                          style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" }}
+                        >
+                          <span className="text-[10px] uppercase tracking-wider font-semibold text-emerald-600 dark:text-emerald-400">
+                            Question
+                          </span>
+                          <p className="text-lg font-semibold text-emerald-900 dark:text-emerald-100 text-center leading-snug max-w-xl">
+                            {stripMarkdownBold(currentFlashcard.prompt)}
+                          </p>
+                          <span className="text-xs text-emerald-500 dark:text-emerald-500/80">Tap card to reveal answer</span>
+                        </div>
+                        <div
+                          className="absolute inset-0 rounded-2xl border-2 border-emerald-400 dark:border-emerald-500 bg-gradient-to-br from-emerald-100 to-emerald-200 dark:from-emerald-900/90 dark:to-emerald-800/90 shadow-lg flex flex-col justify-center p-8"
+                          style={{
+                            backfaceVisibility: "hidden",
+                            WebkitBackfaceVisibility: "hidden",
+                            transform: "rotateY(180deg)",
+                          }}
+                        >
+                          <span className="text-[10px] uppercase tracking-wider font-semibold text-emerald-600 dark:text-emerald-400 mb-2">
+                            Answer
+                          </span>
+                          <p className="text-base font-semibold text-emerald-900 dark:text-emerald-100 leading-snug mb-4">
+                            {stripMarkdownBold(currentFlashcard.correctAnswer)}
+                          </p>
+                          <span className="text-[10px] uppercase tracking-wider font-semibold text-emerald-600/90 dark:text-emerald-400/90 mb-1">
+                            Explanation
+                          </span>
+                          <p className="text-sm text-emerald-800/95 dark:text-emerald-200/95 leading-relaxed">
+                            {stripMarkdownBold(currentFlashcard.explanation)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setFlashcardIndex((i) => (i <= 0 ? flashcardList.length - 1 : i - 1));
+                          setFlashcardFlipped(false);
+                        }}
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                        Previous
+                      </Button>
+                      <span className="text-xs text-muted-foreground">
+                        {flashcardIndex + 1} / {flashcardList.length}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setFlashcardIndex((i) => (i >= flashcardList.length - 1 ? 0 : i + 1));
+                          setFlashcardFlipped(false);
+                        }}
+                      >
+                        Next
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">Mark this card:</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-emerald-600 border-emerald-200 hover:bg-emerald-50"
+                        onClick={() => setFlashcardKnown(currentFlashcard.id, true)}
+                      >
+                        <Check className="w-4 h-4 mr-1" />
+                        Known
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-amber-600 border-amber-200 hover:bg-amber-50"
+                        onClick={() => setFlashcardKnown(currentFlashcard.id, false)}
+                      >
+                        <X className="w-4 h-4 mr-1" />
+                        Unknown
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+      )}
 
       {user?.id && (
         <Card>
@@ -686,7 +1117,7 @@ export function Synthesize() {
           </Card>
 
           {topics.length > 0 && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="outline"
                 onClick={() => {
@@ -701,6 +1132,46 @@ export function Synthesize() {
                 Practice with Speaking Coach
               </Button>
             </div>
+          )}
+
+          {(videoLoading || videoUrl || videoError) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Video className="w-5 h-5" />
+                  Generated video
+                </CardTitle>
+                <CardDescription>
+                  AI-generated video from your synthesis (MiniMax Hailuo). Generation can take a few minutes.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {videoLoading && (
+                  <div className="flex flex-col items-center justify-center gap-3 py-8 text-muted-foreground">
+                    <Loader2 className="w-10 h-10 animate-spin" />
+                    <p className="text-sm">Creating your video… This may take 2–5 minutes.</p>
+                  </div>
+                )}
+                {videoError && !videoLoading && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-800 dark:text-red-200">
+                    {videoError}
+                  </div>
+                )}
+                {videoUrl && !videoLoading && (
+                  <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-black">
+                    <video
+                      src={videoUrl}
+                      controls
+                      className="w-full aspect-video"
+                      playsInline
+                      preload="metadata"
+                    >
+                      Your browser does not support the video tag.
+                    </video>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           )}
 
           {synthesis.knowledgeGraph && (
@@ -722,101 +1193,6 @@ export function Synthesize() {
               </CardContent>
             </Card>
           )}
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Practice key topics</CardTitle>
-              <CardDescription>
-                Short adaptive quiz based on the topics we extracted.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {practiceError && (
-                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                  {practiceError}
-                </div>
-              )}
-              {!questions && !practiceLoading && (
-                <Button
-                  onClick={startPractice}
-                  disabled={practiceLoading || topics.length === 0}
-                >
-                  {topics.length === 0
-                    ? "No topics detected"
-                    : "Start 3-question session"}
-                </Button>
-              )}
-              {practiceLoading && (
-                <p className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-                  <span
-                    className={cn(
-                      "size-4 animate-spin rounded-full border-2 border-current border-t-transparent"
-                    )}
-                  />
-                  Generating questions…
-                </p>
-              )}
-              {questions && questions[currentIndex] && (
-                <div className="space-y-3">
-                  <p className="text-xs text-zinc-500">
-                    Question {currentIndex + 1} of {questions.length}
-                  </p>
-                  <p className="text-sm font-medium text-foreground">
-                    {questions[currentIndex].prompt}
-                  </p>
-                  {questions[currentIndex].type === "mcq" &&
-                    Array.isArray(questions[currentIndex].options) && (
-                      <div className="space-y-2">
-                        {questions[currentIndex].options!.map((opt) => (
-                          <button
-                            key={opt}
-                            type="button"
-                            onClick={() => setCurrentAnswer(opt)}
-                            className={cn(
-                              "w-full rounded-lg border px-3 py-2 text-left text-sm",
-                              currentAnswer === opt
-                                ? "border-[#ffb347] bg-[#ffb347]/10"
-                                : "border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
-                            )}
-                          >
-                            {opt}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  {questions[currentIndex].type === "short" && (
-                    <Textarea
-                      value={currentAnswer}
-                      onChange={(e) => setCurrentAnswer(e.target.value)}
-                      placeholder="Type your answer…"
-                      className="min-h-[80px] text-sm"
-                    />
-                  )}
-                  <div className="flex items-center justify-between pt-2">
-                    <p className="text-xs text-zinc-500 max-w-sm">
-                      After you answer, we&apos;ll show a short explanation and
-                      update your mastery.
-                    </p>
-                    <Button
-                      size="sm"
-                      onClick={handleSubmitAnswer}
-                      disabled={!currentAnswer.trim()}
-                    >
-                      {currentIndex + 1 === (questions?.length ?? 0)
-                        ? "Finish session"
-                        : "Next"}
-                    </Button>
-                  </div>
-                  {sessionComplete && (
-                    <div className="mt-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
-                      Session complete. Your mastery has been updated in the
-                      background.
-                    </div>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
 
           {(narrateLoading || audioUrl) && (
             <Card>

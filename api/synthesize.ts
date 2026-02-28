@@ -99,6 +99,9 @@ export default async function handler(
 
   const materials = typeof rawMaterials === "string" ? rawMaterials.trim() : "";
 
+  // eslint-disable-next-line no-console
+  console.log("[synthesize] POST", { materialsLen: materials.length, hasUserId: !!userId });
+
   if (!materials) {
     res.status(400).json({ error: "Missing or empty 'materials' in request body." });
     return;
@@ -152,6 +155,8 @@ export default async function handler(
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Synthesis failed.";
+    // eslint-disable-next-line no-console
+    console.error("[synthesize] Error:", message, err);
     res.status(500).json({ error: message });
   }
 }

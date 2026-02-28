@@ -91,6 +91,15 @@ const insights = [
   },
 ];
 
+const mascotBubbleMessages = [
+  'Stressed out while studying? 😤 Play around with me!',
+  'Need a break? Let\'s have some fun! 🎮',
+  'Feeling overwhelmed? I\'m here for you! 🧡',
+  'Take a breather — you\'ve got this! 💪',
+  'Study break? Let\'s play! 🐻',
+  'Hey! Want to hang out? ✨',
+];
+
 const recentActivity = [
   {
     type: 'video',
@@ -173,10 +182,14 @@ class GLBErrorBoundary extends Component<
 export function Dashboard() {
   const [searchFocused, setSearchFocused] = useState(false);
   const [showAI, setShowAI] = useState(true);
+  const [mascotReady, setMascotReady] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [avatarExists, setAvatarExists] = useState<boolean | null>(null);
   const [inputText, setInputText] = useState('');
+  const [inputFocused, setInputFocused] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
+  const [bubbleIndex, setBubbleIndex] = useState(0);
+  const [bubbleTriggered, setBubbleTriggered] = useState(false);
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
@@ -228,6 +241,20 @@ export function Dashboard() {
       setChatLoading(false);
     }
   };
+
+  // Show Brain placeholder for 2 sec before revealing 3D mascot
+  useEffect(() => {
+    const t = setTimeout(() => setMascotReady(true), 2000);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Cycle bubble messages every 4 seconds
+  useEffect(() => {
+    const id = setInterval(() => {
+      setBubbleIndex((i) => (i + 1) % mascotBubbleMessages.length);
+    }, 4000);
+    return () => clearInterval(id);
+  }, []);
 
   // Check whether a custom avatar image exists in public/chatbot/avatar.png
   useEffect(() => {
@@ -317,14 +344,66 @@ export function Dashboard() {
               scale: 1.05,
               transition: { duration: 0.3 }
             }}
-            className="relative cursor-pointer"
-            onClick={() => setChatOpen(true)}
+            className="relative"
           >
-            {/* 3D chatbot mascot – model at public/bot/bear.glb */}
+            {/* Floating bubbles – no speech tails, bubble style */}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={bubbleIndex}
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.8, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                className="absolute -top-2 -left-4 md:-left-8 z-10 max-w-[180px] md:max-w-[220px] animate-float cursor-pointer"
+                onClick={() => setBubbleTriggered(true)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => e.key === 'Enter' && setBubbleTriggered(true)}
+              >
+                <div className="relative px-4 py-3 rounded-3xl bg-white/90 dark:bg-slate-800/90 border-2 border-white/60 shadow-[0_8px_32px_rgba(255,140,66,0.25),inset_0_1px_0_rgba(255,255,255,0.8)] hover:shadow-[0_12px_40px_rgba(255,140,66,0.35)] transition-shadow">
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-200">
+                    {mascotBubbleMessages[bubbleIndex]}
+                  </p>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={`bubble2-${bubbleIndex}`}
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.8, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 25, delay: 0.1 }}
+                className="absolute -bottom-4 -right-4 md:-right-8 z-10 max-w-[160px] md:max-w-[200px] animate-float cursor-pointer"
+                onClick={() => setBubbleTriggered(true)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => e.key === 'Enter' && setBubbleTriggered(true)}
+              >
+                <div className="relative px-4 py-2.5 rounded-3xl bg-white/90 dark:bg-slate-800/90 border-2 border-white/60 shadow-[0_8px_32px_rgba(255,140,66,0.25),inset_0_1px_0_rgba(255,255,255,0.8)] hover:shadow-[0_12px_40px_rgba(255,140,66,0.35)] transition-shadow">
+                  <p className="text-xs font-medium text-slate-800 dark:text-slate-200">
+                    {mascotBubbleMessages[(bubbleIndex + 1) % mascotBubbleMessages.length]}
+                  </p>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+            {/* 3D chatbot mascot – model at public/bot */}
             <div className="relative w-80 h-80 md:w-[500px] md:h-[500px] flex items-center justify-center overflow-hidden">
               <GLBErrorBoundary fallback={<Brain className="w-32 h-32 md:w-48 md:h-48 text-white/90" />}>
                 <div className="absolute inset-0 w-full h-full">
-                  <ChatbotGLB url="/bot/bear.glb" scale={1.2} className="w-full h-full" />
+                  {mascotReady ? (
+                    <ChatbotGLB
+                      urls={bubbleTriggered ? ['/bot/Bear_Backflip.glb', '/bot/Bear_Hello.glb'] : ['/bot/Bear_Walking.glb', '/bot/Bear_Running.glb']}
+                      loopCount={bubbleTriggered ? 3 : undefined}
+                      onLoopComplete={bubbleTriggered ? () => setBubbleTriggered(false) : undefined}
+                      scale={1.2}
+                      className="w-full h-full"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Brain className="w-24 h-24 md:w-32 md:h-32 text-white/50 animate-pulse" />
+                    </div>
+                  )}
                 </div>
               </GLBErrorBoundary>
             </div>
@@ -669,9 +748,10 @@ export function Dashboard() {
                 ))}
               </div>
 
-              {/* Quick Action Buttons */}
-              <div className="px-6 pb-3">
-                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+              {/* Quick Action Buttons - hidden when typing */}
+              {!inputFocused && !inputText.trim() && (
+                <div className="px-6 pb-3">
+                  <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                   <button 
                     onClick={() => {
                       setInputText("Create a study plan for this week");
@@ -706,6 +786,7 @@ export function Dashboard() {
                   </button>
                 </div>
               </div>
+            )}
 
               {/* Chat Input */}
               <div className="p-6 pt-3 border-t border-slate-200 bg-slate-50/50">
@@ -714,6 +795,8 @@ export function Dashboard() {
                     type="text"
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
+                    onFocus={() => setInputFocused(true)}
+                    onBlur={() => setInputFocused(false)}
                     onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                     placeholder="Ask me anything about your learning..."
                     className="flex-1 px-4 py-3 bg-white border-2 border-slate-200 focus:border-[#ffb347] rounded-xl text-sm text-foreground placeholder-slate-400 outline-none transition-all"

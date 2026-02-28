@@ -27,7 +27,11 @@ export async function completeM2(params: {
   temperature?: number;
 }): Promise<string> {
   const apiKey = process.env.MINIMAX_API_KEY_M25;
-  if (!apiKey) throw new Error("MINIMAX_API_KEY_M25 is not set");
+  if (!apiKey) {
+    // eslint-disable-next-line no-console
+    console.error("[minimax] MINIMAX_API_KEY_M25 is not set");
+    throw new Error("MINIMAX_API_KEY_M25 is not set");
+  }
 
   const body = {
     model: M2_MODEL,
@@ -55,6 +59,8 @@ export async function completeM2(params: {
 
   if (!res.ok) {
     const err = await res.text();
+    // eslint-disable-next-line no-console
+    console.error("[minimax] M2 API error", res.status, err?.slice(0, 300));
     throw new Error(`M2 API error ${res.status}: ${err}`);
   }
 
