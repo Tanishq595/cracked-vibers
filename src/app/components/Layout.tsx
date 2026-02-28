@@ -14,13 +14,17 @@ import {
   Flame,
   Menu,
   X,
-  LogOut
+  LogOut,
+  Upload,
+  FolderOpen
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 const navItems = [
   { path: '/dashboard', label: 'Home', icon: LayoutDashboard },
   { path: '/dashboard/synthesize', label: 'Synthesize', icon: Sparkles },
+  { path: '/dashboard/library', label: 'Library', icon: FolderOpen },
+  { path: '/dashboard/upload', label: 'Upload', icon: Upload },
   { path: '/dashboard/search', label: 'Search', icon: Search },
   { path: '/dashboard/knowledge-graph', label: 'Graph', icon: Network },
   { path: '/dashboard/gaps', label: 'Gaps', icon: TrendingDown },

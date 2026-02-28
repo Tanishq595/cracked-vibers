@@ -50,6 +50,7 @@ export async function completeM2(params: {
       Authorization: `Bearer ${apiKey}`,
       "Anthropic-Version": "2023-06-01",
     },
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
@@ -202,20 +203,157 @@ export async function textToSpeechAsync(text: string): Promise<string> {
   return retrieveFile(fileId);
 }
 
-// ---- Video (Hailuo-2.3) — stub for text-to-video async ----
+// ---- Video (Hailuo-2.3) — text-to-video async ----
 
-export async function createVideoTask(_prompt: string): Promise<{ task_id?: string }> {
-  // TODO: POST to MiniMax video async endpoint; use MINIMAX_API_KEY_VIDEO
-  return { task_id: undefined };
+const VIDEO_CREATE = `${MINIMAX_BASE}/v1/video_generation`;
+const VIDEO_QUERY = `${MINIMAX_BASE}/v1/query/video_generation`;
+
+export interface VideoCreateResponse {
+  task_id?: string;
+  base_resp?: { status_code: number; status_msg: string };
 }
 
-export async function pollVideoTask(_taskId: string): Promise<{ video_url?: string }> {
+export interface VideoQueryResponse {
+  task_id?: string;
+  status?: string;
+  file_id?: number;
+  base_resp?: { status_code: number; status_msg: string };
+}
+
+/** Create text-to-video task. Uses MINIMAX_API_KEY_VIDEO. */
+export async function createVideoTask(prompt: string): Promise<VideoCreateResponse> {
+  const apiKey = process.env.MINIMAX_API_KEY_VIDEO;
+  if (!apiKey) throw new Error("MINIMAX_API_KEY_VIDEO is not set");
+
+  const res = await fetch(VIDEO_CREATE, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "MiniMax-Hailuo-2.3",
+      prompt: prompt.slice(0, 2000),
+      duration: 6,
+      resolution: "768P",
+    }),
+  });
+
+  if (!res.ok) throw new Error(`Video create error ${res.status}: ${await res.text()}`);
+
+  const data = (await res.json()) as VideoCreateResponse;
+  if (data.base_resp && data.base_resp.status_code !== 0) {
+    throw new Error(`Video: ${data.base_resp.status_msg ?? "Unknown error"}`);
+  }
+  return data;
+}
+
+/** Query video task status. Returns file_id when status is Success. */
+export async function queryVideoTask(taskId: string): Promise<VideoQueryResponse> {
+  const apiKey = process.env.MINIMAX_API_KEY_VIDEO;
+  if (!apiKey) throw new Error("MINIMAX_API_KEY_VIDEO is not set");
+
+  const res = await fetch(`${VIDEO_QUERY}?task_id=${encodeURIComponent(taskId)}`, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
+  if (!res.ok) throw new Error(`Video query error ${res.status}: ${await res.text()}`);
+
+  const data = (await res.json()) as VideoQueryResponse;
+  if (data.base_resp && data.base_resp.status_code !== 0) {
+    throw new Error(`Video query: ${data.base_resp.status_msg ?? "Unknown error"}`);
+  }
+  return data;
+}
+
+/** Retrieve video file URL by file_id. Uses MINIMAX_API_KEY_VIDEO. */
+export async function retrieveVideoFile(fileId: number): Promise<string> {
+  const apiKey = process.env.MINIMAX_API_KEY_VIDEO;
+  if (!apiKey) throw new Error("MINIMAX_API_KEY_VIDEO is not set");
+
+  const res = await fetch(`${FILES_RETRIEVE}?file_id=${fileId}`, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
+  if (!res.ok) throw new Error(`Video file retrieve error ${res.status}: ${await res.text()}`);
+
+  const data = (await res.json()) as RetrieveFileResponse;
+  if (data.base_resp && data.base_resp.status_code !== 0) {
+    throw new Error(`Retrieve: ${data.base_resp.status_msg ?? "Unknown error"}`);
+  }
+  const url = data.file?.download_url;
+  if (!url) throw new Error("No download_url in response");
+  return url;
+}
+
+/** Poll video task until Success/Fail; returns video URL. */
+export async function pollVideoTaskUntilDone(
+  taskId: string,
+  options?: { maxAttempts?: number; intervalMs?: number }
+): Promise<string> {
+  const maxAttempts = options?.maxAttempts ?? 120;
+  const intervalMs = options?.intervalMs ?? 3000;
+
+  for (let i = 0; i < maxAttempts; i++) {
+    const result = await queryVideoTask(taskId);
+    const status = (result.status ?? "").toLowerCase();
+    if (status === "success" && result.file_id != null) {
+      return retrieveVideoFile(result.file_id);
+    }
+    if (status === "fail") {
+      throw new Error(`Video task failed: ${result.base_resp?.status_msg ?? "Unknown"}`);
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  throw new Error("Video task timed out");
+}
+
+// ---- Music (music-2.5) ----
+
+const MUSIC_CREATE = `${MINIMAX_BASE}/v1/music_generation`;
+
+export interface MusicCreateResponse {
+  data?: {
+    status?: number;
+    audio?: string;
+    url?: string;
+  };
+  base_resp?: { status_code: number; status_msg: string };
+}
+
+/** Generate music from lyrics + optional prompt. Uses MINIMAX_API_KEY_MUSIC. Returns audio URL when output_format is url. */
+export async function createMusicTask(params: {
+  lyrics: string;
+  prompt?: string;
+}): Promise<{ audioUrl?: string }> {
+  const apiKey = process.env.MINIMAX_API_KEY_MUSIC;
+  if (!apiKey) throw new Error("MINIMAX_API_KEY_MUSIC is not set");
+
+  const res = await fetch(MUSIC_CREATE, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "music-2.5",
+      lyrics: params.lyrics.slice(0, 3500),
+      prompt: (params.prompt ?? "Indie, ambient, study focus").slice(0, 2000),
+      output_format: "url",
+      audio_setting: { sample_rate: 44100, bitrate: 256000, format: "mp3" },
+    }),
+  });
+
+  if (!res.ok) throw new Error(`Music error ${res.status}: ${await res.text()}`);
+
+  const data = (await res.json()) as MusicCreateResponse;
+  if (data.base_resp && data.base_resp.status_code !== 0) {
+    throw new Error(`Music: ${data.base_resp.status_msg ?? "Unknown error"}`);
+  }
+
+  // When output_format is url, response may include url in data
+  const url = data.data?.url ?? (data.data as { audio_url?: string })?.audio_url;
+  if (url) return { audioUrl: url };
+  // Some docs show hex audio in data.audio when status=2; url might be in extra_info
+  const extra = (data as { extra_info?: { audio_url?: string } }).extra_info;
+  if (extra?.audio_url) return { audioUrl: extra.audio_url };
   return {};
-}
-
-// ---- Music (music-2.5) — stub ----
-
-export async function createMusicTask(_prompt: string): Promise<{ task_id?: string }> {
-  // TODO: use MINIMAX_API_KEY_MUSIC when integrating
-  return { task_id: undefined };
 }

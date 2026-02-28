@@ -184,29 +184,49 @@ export function Dashboard() {
     }
   ]);
 
-  const handleSendMessage = () => {
+  const [chatLoading, setChatLoading] = useState(false);
+
+  const handleSendMessage = async () => {
     if (!inputText.trim()) return;
-    
-    // Add user message
-    const userMessage = { role: 'user', content: inputText };
-    setMessages(prev => [...prev, userMessage]);
-    
-    // Simulate AI response
-    setTimeout(() => {
-      const responses = [
-        "That's a great question! Based on your recent activity, I suggest focusing on the Integration topic next. You've mastered 85% of Derivatives! 🎯",
-        "I noticed you have 3 videos left on Cell Biology. Want me to create a study plan for this week? 📚",
-        "Your knowledge graph shows strong connections in Math and Science. Consider exploring their intersection with Data Science! 💡",
-        "You're on a 7-day learning streak! Keep it up! 🔥 Would you like to review your weekly progress?",
-      ];
-      const aiMessage = { 
-        role: 'assistant', 
-        content: responses[Math.floor(Math.random() * responses.length)]
-      };
-      setMessages(prev => [...prev, aiMessage]);
-    }, 1000);
-    
+
+    const userContent = inputText.trim();
+    const userMessage = { role: 'user', content: userContent };
+    setMessages((prev) => [...prev, userMessage]);
     setInputText('');
+    setChatLoading(true);
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [...messages, userMessage].map((m) => ({
+            role: m.role,
+            content: m.content,
+          })),
+        }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setMessages((prev) => [
+          ...prev,
+          { role: 'assistant', content: `Error: ${data.error ?? 'Something went wrong'}` },
+        ]);
+        return;
+      }
+
+      const content = typeof data.content === 'string' ? data.content : '';
+      setMessages((prev) => [...prev, { role: 'assistant', content: content || 'No response.' }]);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Network error';
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: `Error: ${message}` },
+      ]);
+    } finally {
+      setChatLoading(false);
+    }
   };
 
   // Check whether a custom avatar image exists in public/chatbot/avatar.png
@@ -721,13 +741,14 @@ export function Dashboard() {
                     className="flex-1 px-4 py-3 bg-white border-2 border-slate-200 focus:border-[#ffb347] rounded-xl text-sm text-foreground placeholder-slate-400 outline-none transition-all"
                   />
                   <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
+                    whileHover={{ scale: chatLoading ? 1 : 1.05 }}
+                    whileTap={{ scale: chatLoading ? 1 : 0.95 }}
                     onClick={handleSendMessage}
-                    className="px-6 py-3 bg-gradient-to-r from-[#ffb347] to-[#ff8c42] hover:from-[#ff8c42] hover:to-[#ff6b35] text-white rounded-xl font-semibold flex items-center gap-2 transition-all shadow-lg hover:shadow-xl"
+                    disabled={chatLoading}
+                    className="px-6 py-3 bg-gradient-to-r from-[#ffb347] to-[#ff8c42] hover:from-[#ff8c42] hover:to-[#ff6b35] text-white rounded-xl font-semibold flex items-center gap-2 transition-all shadow-lg hover:shadow-xl disabled:opacity-70 disabled:cursor-not-allowed"
                   >
                     <Send className="w-4 h-4" />
-                    Send
+                    {chatLoading ? 'Sending...' : 'Send'}
                   </motion.button>
                 </div>
               </div>
