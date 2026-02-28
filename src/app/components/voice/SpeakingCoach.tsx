@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Mic, MicOff } from "lucide-react";
+import { useAuth } from "@clerk/clerk-react";
+import { Mic, MicOff, StickyNote, Plus } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { cn } from "../ui/utils";
@@ -42,6 +43,14 @@ export function SpeakingCoach({
   const [sessionSummary, setSessionSummary] = useState<string | null>(null);
   const [micOn, setMicOn] = useState(true);
   const [coachAudioPlaying, setCoachAudioPlaying] = useState(false);
+  const [notes, setNotes] = useState<{ id: string; content: string; source: string | null; created_at: string }[]>([]);
+  const [selectedTextForNote, setSelectedTextForNote] = useState<string | null>(null);
+  const [savingNote, setSavingNote] = useState(false);
+  const [noteError, setNoteError] = useState<string | null>(null);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const transcriptRef = useRef<HTMLDivElement>(null);
+  const selectedTextRef = useRef<string | null>(null);
+  const { getToken } = useAuth();
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
   const recognitionRef = useRef<{ start(): void; stop(): void } | null>(null);
   const userTranscriptRef = useRef("");
@@ -220,6 +229,100 @@ export function SpeakingCoach({
       recognitionRef.current = null;
     };
   }, []);
+
+  const fetchNotes = useCallback(async () => {
+    if (!getToken) {
+      console.log("[notes] fetchNotes skip: no getToken");
+      return;
+    }
+    const token = await getToken();
+    if (!token) {
+      console.log("[notes] fetchNotes skip: no token");
+      return;
+    }
+    try {
+      console.log("[notes] fetchNotes GET /api/speaking-coach-notes");
+      const res = await fetch("/api/speaking-coach-notes", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = (await res.json()) as { notes?: { id: string; content: string; source: string | null; created_at: string }[] };
+      if (res.ok) {
+        const list = data.notes ?? [];
+        console.log("[notes] fetchNotes ok count=" + list.length);
+        setNotes(list);
+      } else {
+        console.log("[notes] fetchNotes res not ok", res.status, data);
+      }
+    } catch (err) {
+      console.log("[notes] fetchNotes error", err);
+    }
+  }, [getToken]);
+
+  useEffect(() => {
+    fetchNotes();
+  }, [fetchNotes]);
+
+  const handleTranscriptMouseUp = useCallback(() => {
+    const sel = window.getSelection();
+    const text = sel?.toString().trim();
+    if (text) {
+      console.log("[notes] selection", text.length, "chars:", text.slice(0, 50) + (text.length > 50 ? "…" : ""));
+      selectedTextRef.current = text;
+      setSelectedTextForNote(text);
+    } else {
+      selectedTextRef.current = null;
+      setSelectedTextForNote(null);
+    }
+  }, []);
+
+  const handleAddToNotes = useCallback(async () => {
+    const text = selectedTextRef.current || selectedTextForNote;
+    console.log("[notes] handleAddToNotes text=" + (text ? text.length + " chars" : "empty"));
+    if (!text?.trim()) {
+      console.log("[notes] handleAddToNotes skip: no text");
+      return;
+    }
+    if (!getToken) {
+      console.log("[notes] handleAddToNotes skip: no getToken");
+      setNoteError("Sign in to save notes.");
+      return;
+    }
+    setNoteError(null);
+    setSavingNote(true);
+    try {
+      const token = await getToken();
+      if (!token) {
+        console.log("[notes] handleAddToNotes skip: no token");
+        setNoteError("Sign in to save notes.");
+        return;
+      }
+      console.log("[notes] POST /api/speaking-coach-notes", { contentLength: text.trim().length });
+      const res = await fetch("/api/speaking-coach-notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ content: text.trim(), source: "coach" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      console.log("[notes] POST response", res.status, data);
+      if (res.ok && data.note) {
+        setNotes((prev) => [data.note, ...prev]);
+        setSelectedTextForNote(null);
+        selectedTextRef.current = null;
+        window.getSelection()?.removeAllRanges();
+        console.log("[notes] note saved id=" + (data.note?.id ?? ""));
+      } else {
+        const errMsg = (data as { error?: string }).error ?? "Couldn't save note";
+        console.log("[notes] save failed", errMsg);
+        setNoteError(errMsg);
+      }
+    } catch (err) {
+      console.log("[notes] handleAddToNotes error", err);
+      setNoteError("Couldn't save note");
+    } finally {
+      setSavingNote(false);
+    }
+  }, [selectedTextForNote, getToken]);
 
   const conversation = useConversation({
     coachContext,
@@ -523,7 +626,14 @@ export function SpeakingCoach({
               </div>
             )}
 
-            <div className="flex max-h-64 flex-col gap-2 overflow-y-auto text-left">
+            <div
+              ref={transcriptRef}
+              className="flex max-h-64 flex-col gap-2 overflow-y-auto text-left select-text"
+              onMouseUp={handleTranscriptMouseUp}
+            >
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                Select text and add to notes below
+              </p>
               {conversationTurns.map((turn, idx) =>
                 turn.role === "user" ? (
                   <div
@@ -562,6 +672,64 @@ export function SpeakingCoach({
                       </span>
                     )}
                   </p>
+                </div>
+              )}
+
+              {selectedTextForNote && (
+                <div className="flex flex-col gap-1 rounded-lg border border-[#ffb347]/50 bg-[#ffb347]/10 p-2">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="default"
+                      className="rounded-full bg-[#ffb347] px-3 text-xs hover:bg-[#ff8c42]"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleAddToNotes();
+                      }}
+                      disabled={savingNote}
+                    >
+                      <Plus className="mr-1 h-3 w-3" />
+                      {savingNote ? "Adding…" : "Add to notes"}
+                    </Button>
+                    <span className="flex-1 truncate text-xs text-muted-foreground" title={selectedTextForNote}>
+                      &quot;{selectedTextForNote.slice(0, 40)}
+                      {selectedTextForNote.length > 40 ? "…" : ""}&quot;
+                    </span>
+                  </div>
+                  {noteError && (
+                    <p className="text-xs text-red-600 dark:text-red-400">{noteError}</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-2 rounded-lg border border-border/60 bg-muted/30">
+              <button
+                type="button"
+                onClick={() => setNotesOpen((o) => !o)}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-foreground hover:bg-muted/50"
+              >
+                <StickyNote className="h-4 w-4 text-[#ffb347]" />
+                My notes ({notes.length})
+              </button>
+              {notesOpen && (
+                <div className="max-h-48 overflow-y-auto border-t border-border/60 px-3 py-2">
+                  {notes.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No notes yet. Select text above and click &quot;Add to notes&quot;.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {notes.map((n) => (
+                        <li
+                          key={n.id}
+                          className="rounded bg-background/80 px-2 py-1.5 text-xs text-foreground"
+                        >
+                          {n.content}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
             </div>

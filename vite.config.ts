@@ -50,6 +50,7 @@ import notionAppendBlocksHandler from './api/notion-append-blocks'
 import speakingAssessmentsListHandler from './api/speaking-assessments-list'
 import speakingAssessmentDetailHandler from './api/speaking-assessment-detail'
 import speakingSessionCompleteHandler from './api/speaking-session-complete'
+import speakingCoachNotesHandler from './api/speaking-coach-notes'
 import streakRecordHandler from './api/streak-record'
 import streakGetHandler from './api/streak-get'
 import insightsHandler from './api/insights'
@@ -130,6 +131,7 @@ const API_HANDLERS: Record<string, (req: Connect.IncomingMessage, res: Connect.S
   '/api/speaking-assessments-list': runVercelHandlerGet(speakingAssessmentsListHandler),
   '/api/speaking-assessment-detail': runVercelHandlerGet(speakingAssessmentDetailHandler),
   '/api/speaking-session-complete': runVercelHandlerWithBody(speakingSessionCompleteHandler),
+  '/api/speaking-coach-notes': runVercelHandlerWithBody(speakingCoachNotesHandler),
   '/api/streak-record': runVercelHandlerWithBody(streakRecordHandler),
   '/api/streak-get': runVercelHandlerWithBody(streakGetHandler),
   '/api/insights': runVercelHandlerWithBody(insightsHandler),
