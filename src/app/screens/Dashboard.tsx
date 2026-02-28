@@ -247,8 +247,11 @@ export function Dashboard() {
             <motion.div
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
-              className="relative cursor-pointer animate-float"
-              onClick={() => setShowAI(false)}
+              className="relative cursor-pointer group animate-float"
+              onClick={() => {
+                setChatOpen(true);
+                setShowAI(false);
+              }}
             >
               {/* Pulsing rings */}
               <div className="absolute inset-0 rounded-full bg-gradient-to-r from-[#ffb347] to-[#ff8c42] opacity-40 blur-xl animate-pulse" />
@@ -584,7 +587,10 @@ export function Dashboard() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={() => setChatOpen(false)}
+            onClick={() => {
+              setChatOpen(false);
+              setShowAI(true);
+            }}
           >
             <motion.div
               initial={{ scale: 0.9, y: 20 }}
@@ -625,7 +631,10 @@ export function Dashboard() {
                   <motion.button
                     whileHover={{ scale: 1.1, rotate: 90 }}
                     whileTap={{ scale: 0.9 }}
-                    onClick={() => setChatOpen(false)}
+                    onClick={() => {
+                      setChatOpen(false);
+                      setShowAI(true);
+                    }}
                     className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
                   >
                     <X className="w-5 h-5 text-white" />
