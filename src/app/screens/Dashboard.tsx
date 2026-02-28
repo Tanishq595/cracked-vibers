@@ -1,318 +1,761 @@
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
-  Target, 
-  TrendingUp, 
+  Brain,
   Flame, 
   Sparkles, 
   ChevronRight,
   Youtube,
   FileText,
-  GraduationCap,
-  Clock,
-  CheckCircle2
+  BookOpen,
+  Play,
+  CheckCircle2,
+  TrendingUp,
+  Zap,
+  ArrowRight,
+  Circle,
+  Network,
+  Search,
+  Calendar,
+  MessageCircle,
+  X,
+  Send,
+  Trophy
 } from 'lucide-react';
+import { useState, useEffect, Component, type ReactNode } from 'react';
+import { KnowledgeGraph } from '../components/KnowledgeGraph';
+import { ChatbotGLB } from '../components/ChatbotGLB';
 
-const kpiCards = [
+const platforms = [
   { 
-    label: 'Knowledge Coverage', 
-    value: '87%', 
-    icon: Target,
-    color: 'indigo',
-    trend: '+5% this week'
+    name: 'Google Classroom', 
+    icon: BookOpen,
+    color: '#34A853',
+    bgColor: 'bg-emerald-500/10',
+    borderColor: 'border-emerald-500/30',
+    status: 'synced',
+    items: 142
   },
   { 
-    label: 'Active Gaps', 
-    value: '4', 
-    icon: TrendingUp,
-    color: 'cyan',
-    trend: '3 closed this week'
+    name: 'Notion', 
+    icon: FileText,
+    color: '#000000',
+    bgColor: 'bg-slate-500/10',
+    borderColor: 'border-slate-500/30',
+    status: 'synced',
+    items: 89
   },
   { 
-    label: 'Study Streak', 
-    value: '12 days', 
-    icon: Flame,
-    color: 'orange',
-    trend: 'Keep it up!'
+    name: 'YouTube', 
+    icon: Youtube,
+    color: '#FF0000',
+    bgColor: 'bg-red-500/10',
+    borderColor: 'border-red-500/30',
+    status: 'synced',
+    items: 234
+  },
+  { 
+    name: 'Canvas', 
+    icon: Circle,
+    color: '#E13F2F',
+    bgColor: 'bg-orange-500/10',
+    borderColor: 'border-orange-500/30',
+    status: 'syncing',
+    items: 67
   },
 ];
 
-const todaysFocus = [
+const insights = [
   {
-    task: 'Review prerequisite: Mitochondrial structure before cellular respiration',
-    difficulty: 'Easy',
-    time: '8 min',
-    source: 'YouTube'
+    title: "You're crushing Derivatives! 🚀",
+    subtitle: "Next up: Integration",
+    progress: 85,
+    color: 'blue',
+    bgGradient: 'from-[#ffb347] to-[#ff8c42]',
+    action: 'Continue Learning'
   },
   {
-    task: 'Complete gap: French Revolution consequences (1789-1799)',
-    difficulty: 'Medium',
-    time: '15 min',
-    source: 'Notion'
+    title: "Cell Biology needs love ❤️",
+    subtitle: "3 videos watched, 2 to go",
+    progress: 60,
+    color: 'emerald',
+    bgGradient: 'from-emerald-600 to-teal-600',
+    action: 'Fill Gap'
   },
   {
-    task: 'Strengthen connection: Calculus → Physics applications',
-    difficulty: 'Hard',
-    time: '25 min',
-    source: 'Classroom'
+    title: "French Revolution mastered! 🎉",
+    subtitle: "Ready for the exam",
+    progress: 100,
+    color: 'amber',
+    bgGradient: 'from-amber-500 to-orange-500',
+    action: 'Review'
   },
 ];
 
 const recentActivity = [
   {
-    type: 'notion',
-    title: 'Updated "Quantum Mechanics Notes"',
-    time: '2 hours ago',
-    icon: FileText,
-    color: '#ffffff'
+    type: 'video',
+    title: 'How DNA Replication Works',
+    platform: 'YouTube',
+    platformColor: '#FF0000',
+    time: '23 min',
+    thumbnail: 'https://images.unsplash.com/photo-1507413245164-6160d8298b31?w=400&h=200&fit=crop',
+    timeAgo: '2h ago'
   },
   {
-    type: 'youtube',
-    title: 'Watched "Cell Division Explained"',
-    time: '4 hours ago',
-    icon: Youtube,
-    color: '#FF0000'
+    type: 'note',
+    title: 'Quantum Mechanics - Chapter 5',
+    platform: 'Notion',
+    platformColor: '#000000',
+    time: 'Updated',
+    thumbnail: 'https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=400&h=200&fit=crop',
+    timeAgo: '4h ago'
   },
   {
-    type: 'classroom',
-    title: 'Submitted "Renaissance Art Essay"',
-    time: '1 day ago',
-    icon: GraduationCap,
-    color: '#34A853'
+    type: 'assignment',
+    title: 'Renaissance Art Analysis',
+    platform: 'Classroom',
+    platformColor: '#34A853',
+    time: 'Due tomorrow',
+    thumbnail: 'https://images.unsplash.com/photo-1541961017774-22349e4a1262?w=400&h=200&fit=crop',
+    timeAgo: '1d ago'
   },
   {
-    type: 'notion',
-    title: 'Created "Linear Algebra Cheat Sheet"',
-    time: '2 days ago',
-    icon: FileText,
-    color: '#ffffff'
+    type: 'pdf',
+    title: 'Linear Algebra Formulas',
+    platform: 'Canvas',
+    platformColor: '#E13F2F',
+    time: '12 pages',
+    thumbnail: 'https://images.unsplash.com/photo-1509228627152-72ae9ae6848d?w=400&h=200&fit=crop',
+    timeAgo: '2d ago'
+  },
+  {
+    type: 'video',
+    title: 'French Revolution Timeline',
+    platform: 'YouTube',
+    platformColor: '#FF0000',
+    time: '18 min',
+    thumbnail: 'https://images.unsplash.com/photo-1461360370896-922624d12aa1?w=400&h=200&fit=crop',
+    timeAgo: '3d ago'
   },
 ];
 
-// Simple graph data for mini preview
-const graphNodes = [
-  { id: 1, x: 100, y: 80, label: 'Calculus', size: 20 },
-  { id: 2, x: 200, y: 60, label: 'Physics', size: 16 },
-  { id: 3, x: 150, y: 140, label: 'Chemistry', size: 18 },
-  { id: 4, x: 250, y: 120, label: 'Biology', size: 14 },
-  { id: 5, x: 180, y: 100, label: 'Stats', size: 12 },
-];
+class GLBErrorBoundary extends Component<
+  { children: ReactNode; fallback: ReactNode },
+  { hasError: boolean; message?: string }
+> {
+  state: { hasError: boolean; message?: string } = { hasError: false };
 
-const graphEdges = [
-  { from: 1, to: 2 },
-  { from: 1, to: 5 },
-  { from: 3, to: 4 },
-  { from: 2, to: 4 },
-];
+  static getDerivedStateFromError = () => ({ hasError: true });
+
+  componentDidCatch(error: unknown) {
+    // Surface the error in the UI (and console) so it isn't a silent blank/fallback.
+    // eslint-disable-next-line no-console
+    console.error('GLB render error:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    this.setState({ message });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="relative w-full h-full flex items-center justify-center">
+          {this.props.fallback}
+          <div className="absolute bottom-3 left-3 right-3 rounded-lg bg-black/40 text-white text-xs px-3 py-2">
+            3D model failed to load. Check DevTools console for details.
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export function Dashboard() {
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [showAI, setShowAI] = useState(true);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [avatarExists, setAvatarExists] = useState<boolean | null>(null);
+  const [inputText, setInputText] = useState('');
+  const [showTooltip, setShowTooltip] = useState(false);
+  const [messages, setMessages] = useState([
+    {
+      role: 'assistant',
+      content: 'Hi! I\'m your M.U.S.T.Learn AI assistant! 👋 I can help you with study plans, gap analysis, and answering questions about your learning materials. What would you like to explore today?'
+    }
+  ]);
+
+  const [chatLoading, setChatLoading] = useState(false);
+
+  const handleSendMessage = async () => {
+    if (!inputText.trim()) return;
+
+    const userContent = inputText.trim();
+    const userMessage = { role: 'user', content: userContent };
+    setMessages((prev) => [...prev, userMessage]);
+    setInputText('');
+    setChatLoading(true);
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [...messages, userMessage].map((m) => ({
+            role: m.role,
+            content: m.content,
+          })),
+        }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setMessages((prev) => [
+          ...prev,
+          { role: 'assistant', content: `Error: ${data.error ?? 'Something went wrong'}` },
+        ]);
+        return;
+      }
+
+      const content = typeof data.content === 'string' ? data.content : '';
+      setMessages((prev) => [...prev, { role: 'assistant', content: content || 'No response.' }]);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Network error';
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: `Error: ${message}` },
+      ]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  // Check whether a custom avatar image exists in public/chatbot/avatar.png
+  useEffect(() => {
+    let mounted = true;
+    const controller = new AbortController();
+    async function check() {
+      try {
+        let res = await fetch('/chatbot/avatar.png', { method: 'HEAD', signal: controller.signal });
+        if (!res.ok) {
+          res = await fetch('/chatbot/avatar.png', { method: 'GET', signal: controller.signal });
+        }
+        if (!mounted) return;
+        setAvatarExists(res.ok);
+      } catch (e) {
+        if (!mounted) return;
+        setAvatarExists(false);
+      }
+    }
+    check();
+    return () => {
+      mounted = false;
+      controller.abort();
+    };
+  }, []);
+
   return (
-    <div className="max-w-[1400px] mx-auto space-y-6 md:space-y-8">
-      {/* Hero Greeting */}
+    <div className="max-w-[1600px] mx-auto space-y-8">
+      {/* Floating AI Assistant Orb */}
+      <AnimatePresence>
+        {showAI && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0 }}
+            className="fixed bottom-8 right-8 z-50"
+          >
+            <motion.div
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              className="relative cursor-pointer group animate-float"
+              onClick={() => {
+                setChatOpen(true);
+                setShowAI(false);
+              }}
+            >
+              {/* Pulsing rings */}
+              <div className="absolute inset-0 rounded-full bg-gradient-to-r from-[#ffb347] to-[#ff8c42] opacity-40 blur-xl animate-pulse" />
+              <div className="absolute inset-0 rounded-full bg-gradient-to-r from-[#ffb347] to-[#ff8c42] opacity-20 blur-2xl animate-pulse" />
+              
+              {/* Main orb */}
+              <div className="relative w-16 h-16 rounded-full bg-gradient-to-br from-[#ffb347] via-[#ff8c42] to-[#ff6b35] shadow-2xl shadow-[#ffb347]/50 flex items-center justify-center border-2 border-white/20">
+                <Sparkles className="w-8 h-8 text-white" />
+              </div>
+
+              {/* Tooltip */}
+              <div className="absolute -top-12 right-0 px-3 py-2 bg-card rounded-lg border border-border shadow-xl whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                <p className="text-xs text-foreground font-semibold">AI Assistant</p>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Hero Section - Floating AI Character */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-50 via-blue-50 to-cyan-50 p-6 md:p-8 border border-indigo-100 shadow-sm"
+        transition={{ delay: 0.1 }}
+        className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#ffb347]/10 via-[#ff8c42]/10 to-[#ff6b35]/10 min-h-[500px] md:min-h-[600px]"
       >
-        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-200/20 rounded-full blur-3xl" />
-        <div className="relative">
-          <h1 className="text-2xl md:text-4xl font-bold mb-2 text-slate-900">
-            Good morning, Tara 👋
-          </h1>
-          <p className="text-lg md:text-xl text-slate-600">
-            You've closed <span className="text-indigo-600 font-bold">3 gaps</span> this week
-          </p>
+        {/* Animated background elements */}
+        <div className="absolute top-0 right-0 w-96 h-96 bg-[#ffb347]/5 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#ff8c42]/5 rounded-full blur-2xl" />
+        
+        {/* Mascot Character */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <motion.div
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ 
+              type: "spring",
+              stiffness: 260,
+              damping: 20,
+              delay: 0.2 
+            }}
+            whileHover={{ 
+              scale: 1.05,
+              transition: { duration: 0.3 }
+            }}
+            className="relative cursor-pointer"
+            onClick={() => setChatOpen(true)}
+          >
+            {/* 3D chatbot mascot – model at public/bot/bear.glb */}
+            <div className="relative w-80 h-80 md:w-[500px] md:h-[500px] flex items-center justify-center overflow-hidden">
+              <GLBErrorBoundary fallback={<Brain className="w-32 h-32 md:w-48 md:h-48 text-white/90" />}>
+                <div className="absolute inset-0 w-full h-full">
+                  <ChatbotGLB url="/bot/bear.glb" scale={1.2} className="w-full h-full" />
+                </div>
+              </GLBErrorBoundary>
+            </div>
+          </motion.div>
         </div>
       </motion.div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-        {kpiCards.map((card, index) => {
-          const Icon = card.icon;
-          const colorClasses = {
-            indigo: 'from-indigo-50 to-indigo-100/50 border-indigo-200 text-indigo-600',
-            cyan: 'from-cyan-50 to-cyan-100/50 border-cyan-200 text-cyan-600',
-            orange: 'from-orange-50 to-orange-100/50 border-orange-200 text-orange-600',
-          };
-
-          return (
-            <motion.div
-              key={card.label}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-              whileHover={{ scale: 1.02, y: -4 }}
-              whileTap={{ scale: 0.98 }}
-              className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${colorClasses[card.color as keyof typeof colorClasses]} border-2 p-6 cursor-pointer group shadow-sm hover:shadow-md transition-all`}
-            >
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white/30 rounded-full blur-2xl group-hover:blur-3xl transition-all" />
-              <div className="relative">
-                <div className="flex items-start justify-between mb-4">
-                  <Icon className={`w-10 h-10 ${colorClasses[card.color as keyof typeof colorClasses].split(' ')[2]}`} />
-                  <div className="text-xs font-semibold text-slate-600">{card.trend}</div>
-                </div>
-                <div className={`text-4xl font-bold mb-1 ${colorClasses[card.color as keyof typeof colorClasses].split(' ')[2]}`}>
-                  {card.value}
-                </div>
-                <div className="text-sm font-semibold text-slate-700">{card.label}</div>
-              </div>
-            </motion.div>
-          );
-        })}
-      </div>
-
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Today's Focus - Spans 2 columns */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="lg:col-span-2 rounded-2xl bg-white border border-slate-200 p-6 hover:border-indigo-200 transition-all shadow-sm hover:shadow-md"
-        >
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-600 to-blue-600 flex items-center justify-center shadow-md">
-                <Sparkles className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-slate-900">Today's Focus</h2>
-                <p className="text-sm text-slate-500 font-medium">AI-generated micro-tasks</p>
-              </div>
-            </div>
-            <button className="text-sm text-indigo-600 hover:text-indigo-700 flex items-center gap-1 font-semibold">
-              Refresh <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="space-y-3">
-            {todaysFocus.map((task, index) => (
-              <motion.div
-                key={index}
-                whileHover={{ x: 4, scale: 1.01 }}
-                whileTap={{ scale: 0.98 }}
-                className="flex items-start gap-4 p-4 rounded-xl bg-slate-50 hover:bg-indigo-50/50 border border-slate-100 hover:border-indigo-200 transition-all cursor-pointer group"
-              >
-                <div className="mt-1">
-                  <CheckCircle2 className="w-5 h-5 text-slate-300 group-hover:text-indigo-500 transition-colors" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm text-slate-700 font-medium mb-2">{task.task}</p>
-                  <div className="flex items-center gap-3 text-xs font-semibold">
-                    <span className={`px-2.5 py-1 rounded-lg ${
-                      task.difficulty === 'Easy' ? 'bg-emerald-100 text-emerald-700' :
-                      task.difficulty === 'Medium' ? 'bg-amber-100 text-amber-700' :
-                      'bg-red-100 text-red-700'
-                    }`}>
-                      {task.difficulty}
-                    </span>
-                    <span className="flex items-center gap-1 text-slate-600">
-                      <Clock className="w-3 h-3" />
-                      {task.time}
-                    </span>
-                    <span className="text-slate-300">•</span>
-                    <span className="text-slate-600">{task.source}</span>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
-
-        {/* Mini Knowledge Graph Preview */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="rounded-2xl bg-white border border-slate-200 p-6 hover:border-cyan-200 transition-all shadow-sm hover:shadow-md"
-        >
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-slate-900">Knowledge Graph</h2>
-            <button className="text-sm text-cyan-600 hover:text-cyan-700 font-semibold">
-              View All
-            </button>
-          </div>
-
-          <div className="relative h-[240px] bg-gradient-to-br from-cyan-50 to-blue-50 rounded-xl overflow-hidden border border-cyan-100">
-            <svg className="w-full h-full">
-              {/* Edges */}
-              {graphEdges.map((edge, i) => {
-                const from = graphNodes.find(n => n.id === edge.from);
-                const to = graphNodes.find(n => n.id === edge.to);
-                if (!from || !to) return null;
-                return (
-                  <line
-                    key={i}
-                    x1={from.x}
-                    y1={from.y}
-                    x2={to.x}
-                    y2={to.y}
-                    stroke="rgba(6, 182, 212, 0.4)"
-                    strokeWidth="2"
-                  />
-                );
-              })}
-              
-              {/* Nodes */}
-              {graphNodes.map((node) => (
-                <g key={node.id}>
-                  <circle
-                    cx={node.x}
-                    cy={node.y}
-                    r={node.size}
-                    fill="rgba(6, 182, 212, 0.2)"
-                    stroke="rgba(6, 182, 212, 0.8)"
-                    strokeWidth="2.5"
-                    className="cursor-pointer hover:fill-cyan-300/40 transition-all"
-                  />
-                  <text
-                    x={node.x}
-                    y={node.y + node.size + 14}
-                    textAnchor="middle"
-                    className="text-[10px] fill-cyan-700 font-semibold"
-                  >
-                    {node.label}
-                  </text>
-                </g>
-              ))}
-            </svg>
-          </div>
-        </motion.div>
-      </div>
-
-      {/* Recent Activity */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5 }}
-        className="rounded-2xl bg-white border border-slate-200 p-6 shadow-sm"
-      >
-        <h2 className="text-xl font-bold mb-6 text-slate-900">Recent Activity</h2>
-        <div className="space-y-3">
-          {recentActivity.map((activity, index) => {
-            const Icon = activity.icon;
+      {/* Connected Platforms */}
+      <div>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-foreground">Connected Tools</h2>
+          <button className="text-[#ffb347] hover:text-[#ff8c42] flex items-center gap-1 font-semibold transition-colors">
+            Manage
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {platforms.map((platform, index) => {
+            const Icon = platform.icon;
             return (
               <motion.div
-                key={index}
-                whileHover={{ x: 4, scale: 1.005 }}
+                key={platform.name}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 + index * 0.05 }}
+                whileHover={{ scale: 1.03, y: -4 }}
                 whileTap={{ scale: 0.98 }}
-                className="flex items-center gap-4 p-4 rounded-xl bg-slate-50 hover:bg-indigo-50/50 border border-slate-100 hover:border-indigo-200 transition-all cursor-pointer"
+                className={`relative overflow-hidden rounded-2xl bg-card border-2 ${platform.borderColor} p-6 cursor-pointer group hover:shadow-lg hover:shadow-black/20 transition-all`}
               >
-                <div 
-                  className="w-10 h-10 rounded-lg flex items-center justify-center"
-                  style={{ backgroundColor: `${activity.color === '#ffffff' ? '#6366F1' : activity.color}20` }}
-                >
-                  <Icon className="w-5 h-5" style={{ color: activity.color === '#ffffff' ? '#6366F1' : activity.color }} />
+                <div className={`absolute top-0 right-0 w-32 h-32 ${platform.bgColor} rounded-full blur-3xl opacity-50 group-hover:opacity-100 transition-opacity`} />
+                
+                <div className="relative">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className={`w-12 h-12 ${platform.bgColor} rounded-xl flex items-center justify-center border ${platform.borderColor}`}>
+                      <Icon className="w-6 h-6" style={{ color: platform.color }} />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${
+                        platform.status === 'synced' ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'
+                      }`} />
+                      <span className={`text-xs font-semibold ${
+                        platform.status === 'synced' ? 'text-emerald-400' : 'text-amber-400'
+                      }`}>
+                        {platform.status === 'synced' ? 'Synced' : 'Syncing...'}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <h3 className="font-bold text-foreground mb-1">{platform.name}</h3>
+                  <p className="text-sm text-muted-foreground">{platform.items} items</p>
                 </div>
-                <div className="flex-1">
-                  <p className="text-sm text-slate-700 font-medium">{activity.title}</p>
-                  <p className="text-xs text-slate-500 font-medium">{activity.time}</p>
-                </div>
-                <ChevronRight className="w-5 h-5 text-slate-300" />
               </motion.div>
             );
           })}
         </div>
+      </div>
+
+      {/* AI Insights - Motivational Cards */}
+      <div>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ffb347] to-[#ff8c42] flex items-center justify-center">
+              <Sparkles className="w-5 h-5 text-white" />
+            </div>
+            <h2 className="text-2xl font-bold text-foreground">AI Insights</h2>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {insights.map((insight, index) => (
+            <motion.div
+              key={insight.title}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 + index * 0.1 }}
+              whileHover={{ scale: 1.03, y: -6 }}
+              className="relative overflow-hidden rounded-2xl bg-card border border-slate-200 p-6 hover:border-[#ffb347]/50 transition-all group cursor-pointer shadow-sm"
+            >
+              {/* Progress Ring */}
+              <div className="flex items-start gap-4 mb-4">
+                <div className="relative w-20 h-20 flex-shrink-0">
+                  <svg className="w-20 h-20 transform -rotate-90">
+                    <circle
+                      cx="40"
+                      cy="40"
+                      r="32"
+                      stroke="currentColor"
+                      strokeWidth="6"
+                      fill="none"
+                      className="text-slate-700"
+                    />
+                    <circle
+                      cx="40"
+                      cy="40"
+                      r="32"
+                      stroke="url(#gradient)"
+                      strokeWidth="6"
+                      fill="none"
+                      strokeDasharray={`${2 * Math.PI * 32}`}
+                      strokeDashoffset={`${2 * Math.PI * 32 * (1 - insight.progress / 100)}`}
+                      className="transition-all duration-1000"
+                      strokeLinecap="round"
+                    />
+                    <defs>
+                      <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" className={`text-${insight.color}-500`} stopColor="currentColor" />
+                        <stop offset="100%" className={`text-${insight.color}-600`} stopColor="currentColor" />
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className={`text-lg font-bold text-${insight.color}-400`}>{insight.progress}%</span>
+                  </div>
+                </div>
+
+                <div className="flex-1">
+                  <h3 className="font-bold text-foreground mb-1 text-lg">{insight.title}</h3>
+                  <p className="text-sm text-muted-foreground">{insight.subtitle}</p>
+                </div>
+              </div>
+
+              <motion.button
+                whileHover={{ x: 4 }}
+                whileTap={{ scale: 0.95 }}
+                className={`w-full px-4 py-3 bg-gradient-to-r ${insight.bgGradient} text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg group-hover:shadow-xl transition-all`}
+              >
+                {insight.action}
+                <ArrowRight className="w-4 h-4" />
+              </motion.button>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+
+      {/* Two Column Layout: Knowledge Graph + Quick Stats */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Knowledge Graph Preview */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="lg:col-span-2 rounded-2xl bg-card border border-slate-200 p-6 hover:border-cyan-500/50 transition-all group shadow-sm"
+        >
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-600 to-blue-600 flex items-center justify-center">
+                <Network className="w-5 h-5 text-white" />
+              </div>
+              <h2 className="text-2xl font-bold text-foreground">Knowledge Graph</h2>
+            </div>
+            <motion.button
+              whileHover={{ x: 4 }}
+              className="text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-semibold transition-colors"
+            >
+              Explore
+              <ChevronRight className="w-4 h-4" />
+            </motion.button>
+          </div>
+
+          <KnowledgeGraph />
+        </motion.div>
+
+        {/* Quick Stats */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="rounded-2xl bg-card border border-slate-200 p-6 space-y-4 shadow-sm"
+        >
+          <h3 className="font-bold text-foreground mb-6">This Week</h3>
+          
+          <div className="space-y-4">
+            <div className="p-4 rounded-xl bg-gradient-to-br from-[#ffb347]/10 to-[#ff8c42]/10 border border-[#ffb347]/20">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-muted-foreground">Study Time</span>
+                <TrendingUp className="w-4 h-4 text-emerald-400" />
+              </div>
+              <p className="text-3xl font-bold text-foreground">12.5h</p>
+              <p className="text-xs text-emerald-400 font-semibold mt-1">+25% from last week</p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border border-emerald-500/20">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-muted-foreground">Topics Mastered</span>
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              </div>
+              <p className="text-3xl font-bold text-foreground">7</p>
+              <p className="text-xs text-amber-400 font-semibold mt-1">3 more to go!</p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-gradient-to-br from-amber-500/10 to-orange-500/10 border border-amber-500/20">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-muted-foreground">Gaps Closed</span>
+                <Flame className="w-4 h-4 text-amber-400" />
+              </div>
+              <p className="text-3xl font-bold text-foreground">3</p>
+              <p className="text-xs text-[#ffb347] font-semibold mt-1">Keep the momentum!</p>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Recent Across Platforms - Horizontal Scroll */}
+      <div>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-foreground">Recent Across Platforms</h2>
+          <button className="text-[#ffb347] hover:text-[#ff8c42] flex items-center gap-1 font-semibold transition-colors">
+            View All
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="flex gap-4 overflow-x-auto pb-4 -mx-4 px-4 scrollbar-hide">
+          {recentActivity.map((item, index) => (
+            <motion.div
+              key={index}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.6 + index * 0.05 }}
+              whileHover={{ scale: 1.05, y: -8 }}
+              className="flex-shrink-0 w-[280px] rounded-2xl bg-card border border-slate-200 overflow-hidden hover:border-[#ffb347]/50 transition-all cursor-pointer group shadow-sm"
+            >
+              {/* Thumbnail */}
+              <div className="relative h-36 overflow-hidden bg-gradient-to-br from-slate-800 to-slate-900">
+                <img 
+                  src={item.thumbnail} 
+                  alt={item.title}
+                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                />
+                <div className="absolute top-2 right-2 px-2 py-1 bg-black/60 backdrop-blur-sm rounded-lg border border-white/10">
+                  <span className="text-xs text-white font-semibold">{item.time}</span>
+                </div>
+                <div 
+                  className="absolute top-2 left-2 w-8 h-8 rounded-lg flex items-center justify-center backdrop-blur-sm border"
+                  style={{ 
+                    backgroundColor: `${item.platformColor}20`,
+                    borderColor: `${item.platformColor}40`
+                  }}
+                >
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.platformColor }} />
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="p-4">
+                <h4 className="font-bold text-foreground mb-2 line-clamp-2">{item.title}</h4>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground font-semibold">{item.platform}</span>
+                  <span className="text-xs text-slate-500">{item.timeAgo}</span>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+
+      {/* Motivational Quote / AI Assistant Hint */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 1 }}
+        className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#ffb347]/20 via-[#ff8c42]/20 to-[#ff6b35]/20 border border-[#ffb347]/30 p-6 text-center"
+      >
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-64 bg-[#ffb347]/20 rounded-full blur-3xl" />
+        <div className="relative">
+          <Sparkles className="w-8 h-8 text-[#ffb347] mx-auto mb-3" />
+          <p className="text-lg text-foreground/90 font-medium italic">
+            "Every expert was once a beginner. Keep learning, keep growing."
+          </p>
+          <p className="text-sm text-muted-foreground mt-2">Your AI learning companion is always here to help 🧡</p>
+        </div>
       </motion.div>
+
+      {/* AI Chatbot Modal */}
+      <AnimatePresence>
+        {chatOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => {
+              setChatOpen(false);
+              setShowAI(true);
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-2xl h-[600px] bg-card rounded-3xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden"
+            >
+              {/* Chat Header */}
+              <div className="relative overflow-hidden bg-gradient-to-r from-[#ffb347] via-[#ff8c42] to-[#ff6b35] p-6">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl" />
+                <div className="relative flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <motion.div
+                      animate={{
+                        scale: [1, 1.1, 1]
+                      }}
+                      transition={{
+                        duration: 2,
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                      }}
+                      className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center drop-shadow-xl overflow-hidden"
+                    >
+                      {avatarExists === false ? (
+                        <Brain className="w-8 h-8 text-white" />
+                      ) : avatarExists === null ? (
+                        <div className="w-8 h-8 rounded-full bg-white/30 animate-pulse" />
+                      ) : (
+                        <img src="/chatbot/avatar.png" alt="AI avatar" className="w-full h-full object-cover" />
+                      )}
+                    </motion.div>
+                    <div>
+                      <h3 className="text-xl font-bold text-white">M.U.S.T.Learn AI</h3>
+                      <p className="text-sm text-white/80">Your personal learning assistant</p>
+                    </div>
+                  </div>
+                  <motion.button
+                    whileHover={{ scale: 1.1, rotate: 90 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => {
+                      setChatOpen(false);
+                      setShowAI(true);
+                    }}
+                    className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
+                  >
+                    <X className="w-5 h-5 text-white" />
+                  </motion.button>
+                </div>
+              </div>
+
+              {/* Chat Messages */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                {messages.map((message, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.1 }}
+                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div
+                      className={`max-w-[80%] rounded-2xl p-4 ${
+                        message.role === 'user'
+                          ? 'bg-gradient-to-r from-[#ffb347] to-[#ff8c42] text-white'
+                          : 'bg-slate-100 text-slate-900 border border-slate-200'
+                      }`}
+                    >
+                      {message.role === 'assistant' && (
+                        <div className="flex items-center gap-2 mb-2">
+                          <Sparkles className="w-4 h-4 text-[#ffb347]" />
+                          <span className="text-xs font-bold text-[#ffb347]">AI Assistant</span>
+                        </div>
+                      )}
+                      <p className="text-sm leading-relaxed">{message.content}</p>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+
+              {/* Quick Action Buttons */}
+              <div className="px-6 pb-3">
+                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                  <button 
+                    onClick={() => {
+                      setInputText("Create a study plan for this week");
+                    }}
+                    className="flex-shrink-0 px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-900 rounded-xl text-xs font-semibold transition-colors"
+                  >
+                    📅 Study Plan
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setInputText("Show my learning gaps");
+                    }}
+                    className="flex-shrink-0 px-4 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-xl text-xs font-semibold transition-colors"
+                  >
+                    🎯 Gap Analysis
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setInputText("Explain my knowledge graph");
+                    }}
+                    className="flex-shrink-0 px-4 py-2 bg-cyan-100 hover:bg-cyan-200 text-cyan-700 rounded-xl text-xs font-semibold transition-colors"
+                  >
+                    🧠 Knowledge Graph
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setInputText("Show my progress summary");
+                    }}
+                    className="flex-shrink-0 px-4 py-2 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-xl text-xs font-semibold transition-colors"
+                  >
+                    📊 Progress
+                  </button>
+                </div>
+              </div>
+
+              {/* Chat Input */}
+              <div className="p-6 pt-3 border-t border-slate-200 bg-slate-50/50">
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    value={inputText}
+                    onChange={(e) => setInputText(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                    placeholder="Ask me anything about your learning..."
+                    className="flex-1 px-4 py-3 bg-white border-2 border-slate-200 focus:border-[#ffb347] rounded-xl text-sm text-foreground placeholder-slate-400 outline-none transition-all"
+                  />
+                  <motion.button
+                    whileHover={{ scale: chatLoading ? 1 : 1.05 }}
+                    whileTap={{ scale: chatLoading ? 1 : 0.95 }}
+                    onClick={handleSendMessage}
+                    disabled={chatLoading}
+                    className="px-6 py-3 bg-gradient-to-r from-[#ffb347] to-[#ff8c42] hover:from-[#ff8c42] hover:to-[#ff6b35] text-white rounded-xl font-semibold flex items-center gap-2 transition-all shadow-lg hover:shadow-xl disabled:opacity-70 disabled:cursor-not-allowed"
+                  >
+                    <Send className="w-4 h-4" />
+                    {chatLoading ? 'Sending...' : 'Send'}
+                  </motion.button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

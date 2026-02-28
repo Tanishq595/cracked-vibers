@@ -170,10 +170,10 @@ export function KnowledgeGraph() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <button className="p-3 bg-white hover:bg-slate-50 rounded-xl border-2 border-slate-200 hover:border-indigo-400 transition-all shadow-sm">
+          <button className="p-3 bg-white hover:bg-slate-50 rounded-xl border-2 border-slate-200 hover:border-[#ffb347] transition-all shadow-sm">
             <Download className="w-5 h-5 text-slate-600" />
           </button>
-          <button className="p-3 bg-white hover:bg-slate-50 rounded-xl border-2 border-slate-200 hover:border-indigo-400 transition-all shadow-sm">
+          <button className="p-3 bg-white hover:bg-slate-50 rounded-xl border-2 border-slate-200 hover:border-[#ffb347] transition-all shadow-sm">
             <Maximize2 className="w-5 h-5 text-slate-600" />
           </button>
         </div>
@@ -196,7 +196,7 @@ export function KnowledgeGraph() {
                 onClick={() => setSelectedSubject(subject)}
                 className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
                   selectedSubject === subject
-                    ? 'bg-indigo-600 text-white shadow-md'
+                    ? 'bg-[#ffb347] text-white shadow-md'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
                 }`}
               >
@@ -228,7 +228,7 @@ export function KnowledgeGraph() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
-        className="relative rounded-2xl bg-gradient-to-br from-slate-50 via-blue-50/30 to-cyan-50/30 border-2 border-slate-200 p-8 overflow-hidden shadow-sm"
+        className="relative rounded-2xl bg-gradient-to-br from-slate-50 via-[#ffb347]/10 to-[#ff8c42]/10 border-2 border-slate-200 p-8 overflow-hidden shadow-sm"
         style={{ height: '600px' }}
       >
         {/* Legend */}
@@ -352,7 +352,7 @@ export function KnowledgeGraph() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            className="absolute bottom-6 left-6 bg-white/95 backdrop-blur-xl border-2 border-indigo-200 rounded-2xl p-6 w-80 shadow-xl"
+            className="absolute bottom-6 left-6 bg-white/95 backdrop-blur-xl border-2 border-[#ffb347]/40 rounded-2xl p-6 w-80 shadow-xl"
             style={{ zIndex: 20 }}
           >
             <div className="flex items-start justify-between mb-4">
@@ -369,7 +369,7 @@ export function KnowledgeGraph() {
                   <span className="text-xs text-slate-600 font-semibold">{hoveredNode.subject}</span>
                 </div>
               </div>
-              <ExternalLink className="w-5 h-5 text-slate-400 hover:text-indigo-600 cursor-pointer transition-colors" />
+              <ExternalLink className="w-5 h-5 text-slate-400 hover:text-[#ffb347] cursor-pointer transition-colors" />
             </div>
 
             <div className="space-y-3">
@@ -383,7 +383,7 @@ export function KnowledgeGraph() {
                 </div>
                 <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
                   <div 
-                    className="h-full bg-gradient-to-r from-indigo-500 to-cyan-500 rounded-full transition-all"
+                    className="h-full bg-gradient-to-r from-[#ffb347] to-[#ff8c42] rounded-full transition-all"
                     style={{ width: `${hoveredNode.confidence}%` }}
                   />
                 </div>
@@ -407,13 +407,13 @@ export function KnowledgeGraph() {
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: 'Total Topics', value: nodes.length, color: 'indigo' },
+          { label: 'Total Topics', value: nodes.length, color: 'orange' },
           { label: 'Connections', value: edges.length, color: 'cyan' },
           { label: 'Avg Confidence', value: '84%', color: 'emerald' },
           { label: 'Subjects', value: subjects.length - 1, color: 'amber' },
         ].map((stat, i) => {
           const colorClasses = {
-            indigo: 'text-indigo-600 bg-indigo-50 border-indigo-200',
+            orange: 'text-[#ff8c42] bg-[#ffb347]/10 border-[#ffb347]/30',
             cyan: 'text-cyan-600 bg-cyan-50 border-cyan-200',
             emerald: 'text-emerald-600 bg-emerald-50 border-emerald-200',
             amber: 'text-amber-600 bg-amber-50 border-amber-200',
