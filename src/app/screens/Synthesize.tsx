@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useUser } from "@clerk/clerk-react";
 import ReactMarkdown from "react-markdown";
-import { useLocation } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import {
   Card,
   CardContent,
@@ -101,6 +101,7 @@ export function Synthesize() {
   const location = useLocation() as {
     state?: { materialsFromLibrary?: string } | null;
   };
+  const navigate = useNavigate();
 
   type LibraryItem = {
     key: string;
@@ -683,6 +684,24 @@ export function Synthesize() {
               })()}
             </CardContent>
           </Card>
+
+          {topics.length > 0 && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const baseMd = stripKnowledgeGraphSection(synthesis.markdown);
+                  const gaps = sectionLines(extractSection(baseMd, "Knowledge Gaps"));
+                  const plan = sectionLines(extractSection(baseMd, "Study Plan"));
+                  navigate("/dashboard/coach", {
+                    state: { topics, knowledgeGaps: gaps, studyPlan: plan },
+                  });
+                }}
+              >
+                Practice with Speaking Coach
+              </Button>
+            </div>
+          )}
 
           {synthesis.knowledgeGraph && (
             <Card>

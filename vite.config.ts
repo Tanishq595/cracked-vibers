@@ -22,6 +22,9 @@ import masteryUpdateHandler from './api/mastery-update'
 import questionsHandler from './api/questions'
 import synthesesListHandler from './api/syntheses-list'
 import synthesisGetHandler from './api/synthesis-get'
+import oralSessionHandler from './api/oral-session'
+import ttsElevenHandler from './api/tts-eleven'
+import coachResponseHandler from './api/coach-response'
 
 function readBody(nodeReq: Connect.IncomingMessage): Promise<Record<string, unknown> | null> {
   return new Promise((resolve, reject) => {
@@ -62,6 +65,9 @@ const API_HANDLERS: Record<string, (req: Connect.IncomingMessage, res: Connect.S
   '/api/questions': runVercelHandlerWithBody(questionsHandler),
   '/api/syntheses-list': runVercelHandlerWithBody(synthesesListHandler),
   '/api/synthesis-get': runVercelHandlerWithBody(synthesisGetHandler),
+  '/api/oral-session': runVercelHandlerWithBody(oralSessionHandler),
+  '/api/tts-eleven': runVercelHandlerWithBody(ttsElevenHandler),
+  '/api/coach-response': runVercelHandlerWithBody(coachResponseHandler),
 }
 
 type VercelReq = {
