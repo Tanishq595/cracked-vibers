@@ -2,12 +2,18 @@ import { useState, useCallback, useRef } from "react";
 
 type ConversationStatus = "idle" | "connecting" | "connected" | "disconnected";
 
-export type CoachMode = "explain" | "gaps" | "exam";
+export type CoachMode = "explain" | "gaps" | "exam" | "debate";
+
+export type DebateSide = "for" | "against";
 
 export interface CoachContext {
   topics?: { id: string; label: string }[];
   knowledgeGaps?: string[];
   studyPlan?: string[];
+  /** Debate mode: the motion/topic to argue */
+  debateMotion?: string;
+  /** Debate mode: which side the user is arguing */
+  debateSide?: DebateSide;
 }
 
 interface UseConversationProps {
@@ -28,6 +34,8 @@ interface UseConversationReturn {
   startSession: (options: { signedUrl: string }) => Promise<string | undefined>;
   endSession: () => Promise<void>;
   sendMessage: (message: string) => void;
+  /** Request the next coach reply (used when user has spoken; only for non-debate modes). */
+  requestCoachReply: () => Promise<void>;
 }
 
 function buildAgentMessages(
@@ -40,8 +48,16 @@ function buildAgentMessages(
   const plan = context?.studyPlan ?? [];
 
   if (labels.length === 0 && gaps.length === 0) {
+    const firstByMode =
+      mode === "gaps"
+        ? "Hi! We're in Teach Back Gaps mode. I'll have you explain things in your own words and we'll fill any gaps together. Try summarizing something you've been learning."
+        : mode === "exam"
+          ? "Hi! We're in Exam Style mode. I'll ask you to explain as if in a test. When you're ready, give a short definition or explanation of any topic you know."
+          : mode === "debate"
+            ? "Welcome to debate mode. Tell me your motion and side when you're ready, or we can use a default. You'll have prep time then a timed opening."
+            : "Hi! We're in Explain Topics mode. I'll explain concepts and answer your questions. Tell me a topic you're learning, or start by explaining it in your own words.";
     return [
-      "Hi! Let's practice explaining what you're learning.",
+      firstByMode,
       "Try summarizing one of your key topics in your own words.",
       "Great. Now tell me one thing that still feels confusing.",
       "Nice work. You're getting clearer every time you explain it.",
@@ -63,6 +79,16 @@ function buildAgentMessages(
       `Define or explain: ${topic}.`,
       labels.length > 1 ? `Next: how does ${topic} relate to ${labels[1]}?` : "How would you apply this in a problem?",
       "Solid. Practice explaining under time pressure to build exam confidence.",
+    ];
+  }
+  if (mode === "debate") {
+    const motion = (context as CoachContext).debateMotion?.trim() || "This house believes that practice makes perfect.";
+    const side = (context as CoachContext).debateSide === "against" ? "against" : "for";
+    return [
+      `Welcome to debate mode. The motion is: "${motion}". You are arguing ${side} the motion. You have one minute to prepare. When I say "Time", give your opening statement.`,
+      "Time. You have three minutes for your opening. Begin.",
+      "Thirty seconds remaining.",
+      "Time's up. Thank you. I'll give you brief feedback on your argumentation shortly.",
     ];
   }
   if (labels.length > 0) {
@@ -94,6 +120,7 @@ export const useConversation = ({
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
   const sessionRef = useRef<{ timeouts?: ReturnType<typeof setTimeout>[] } | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nextCoachIndexRef = useRef(0);
 
   const startSession = useCallback(
     async (options: { signedUrl: string }) => {
@@ -104,15 +131,25 @@ export const useConversation = ({
         clearTimeout(timeoutRef.current);
       }
 
+      nextCoachIndexRef.current = 0;
       const fallbackMessages = buildAgentMessages(coachContext, coachMode);
-      const delays = [2000, 20000, 38000, 56000];
+      // First message (index 0) fires immediately so the coach welcomes first.
+      // Non-debate: only schedule this one; later messages when user speaks (requestCoachReply).
+      // Debate: intro 0, prep ~15s then "Time. Begin", 30s at 45s, time's up at 60s
+      const delays =
+        coachMode === "debate"
+          ? [0, 15000, 45000, 60000]
+          : [0, 20000, 38000, 56000];
 
       timeoutRef.current = setTimeout(() => {
         setStatus("connected");
         onConnect?.();
 
         const timeouts: ReturnType<typeof setTimeout>[] = [];
-        fallbackMessages.forEach((fallbackMsg, i) => {
+        const indicesToSchedule =
+          coachMode === "debate" ? [0, 1, 2, 3] : [0];
+        indicesToSchedule.forEach((i) => {
+          const fallbackMsg = fallbackMessages[i] ?? "";
           const t = setTimeout(async () => {
             setIsSpeaking(true);
             let msg = fallbackMsg;
@@ -125,6 +162,7 @@ export const useConversation = ({
               }
             }
             onMessage?.(msg);
+            nextCoachIndexRef.current = i + 1;
             setTimeout(() => setIsSpeaking(false), 500);
           }, delays[i] ?? 2000 + i * 18000);
           timeouts.push(t);
@@ -168,12 +206,31 @@ export const useConversation = ({
     [status, onMessage],
   );
 
+  const requestCoachReply = useCallback(async () => {
+    if (status !== "connected" || !getCoachMessage) return;
+    const idx = nextCoachIndexRef.current;
+    const fallbackMessages = buildAgentMessages(coachContext, coachMode);
+    const fallbackMsg = fallbackMessages[idx] ?? "";
+    setIsSpeaking(true);
+    let msg = fallbackMsg;
+    try {
+      const dynamic = await getCoachMessage(idx);
+      if (dynamic && dynamic.trim()) msg = dynamic.trim();
+    } catch {
+      // keep fallback
+    }
+    onMessage?.(msg);
+    nextCoachIndexRef.current = idx + 1;
+    setTimeout(() => setIsSpeaking(false), 500);
+  }, [status, coachContext, coachMode, getCoachMessage, onMessage]);
+
   return {
     status,
     isSpeaking,
     startSession,
     endSession,
     sendMessage,
+    requestCoachReply,
   };
 };
 
