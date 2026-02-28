@@ -72,32 +72,11 @@ const platforms: Array<{
   { name: 'Canvas', icon: Circle, color: '#E13F2F', bgColor: 'bg-orange-500/10', borderColor: 'border-orange-500/30', status: 'syncing', items: 67 },
 ];
 
-const insights = [
-  {
-    title: "You're crushing Derivatives! 🚀",
-    subtitle: "Next up: Integration",
-    progress: 85,
-    color: 'blue',
-    bgGradient: 'from-[#ffb347] to-[#ff8c42]',
-    action: 'Continue Learning'
-  },
-  {
-    title: "Cell Biology needs love ❤️",
-    subtitle: "3 videos watched, 2 to go",
-    progress: 60,
-    color: 'emerald',
-    bgGradient: 'from-emerald-600 to-teal-600',
-    action: 'Fill Gap'
-  },
-  {
-    title: "French Revolution mastered! 🎉",
-    subtitle: "Ready for the exam",
-    progress: 100,
-    color: 'amber',
-    bgGradient: 'from-amber-500 to-orange-500',
-    action: 'Review'
-  },
-];
+const INSIGHT_CARD_GRADIENTS = [
+  { progressColor: 'text-orange-400', stopColors: ['#ffb347', '#ff8c42'], bgGradient: 'from-[#ffb347] to-[#ff8c42]' },
+  { progressColor: 'text-emerald-400', stopColors: ['#059669', '#0d9488'], bgGradient: 'from-emerald-600 to-teal-600' },
+  { progressColor: 'text-amber-400', stopColors: ['#f59e0b', '#ea580c'], bgGradient: 'from-amber-500 to-orange-500' },
+] as const;
 
 const mascotBubbleMessages = [
   'Stressed out while studying? 😤 Play around with me!',
@@ -206,6 +185,72 @@ export function Dashboard() {
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>(() => loadChatHistory(null));
   const [chatLoading, setChatLoading] = useState(false);
   const [youtubeHistoryCount, setYoutubeHistoryCount] = useState<number | null>(null);
+  const [insightCards, setInsightCards] = useState<Array<{ title: string; subtitle: string; progress: number; synthesisId?: string }>>([]);
+  const [insightsLoading, setInsightsLoading] = useState(true);
+  const [insightsError, setInsightsError] = useState(false);
+  const [hasSyntheses, setHasSyntheses] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!userId) {
+      setHasSyntheses(null);
+      setInsightCards([]);
+      setInsightsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setInsightsLoading(true);
+    setInsightsError(false);
+    (async () => {
+      try {
+        const listRes = await fetch('/api/syntheses-list', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId }),
+        });
+        if (cancelled) return;
+        const listData = (await listRes.json()) as { items?: unknown[] };
+        const items = Array.isArray(listData?.items) ? listData.items : [];
+        if (items.length === 0) {
+          setHasSyntheses(false);
+          setInsightCards([]);
+          setInsightsLoading(false);
+          return;
+        }
+        setHasSyntheses(true);
+        const insightsRes = await fetch('/api/insights', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId }),
+        });
+        if (cancelled) return;
+        if (!insightsRes.ok) {
+          setInsightsError(true);
+          setInsightCards([]);
+          setInsightsLoading(false);
+          return;
+        }
+        const insightsData = (await insightsRes.json()) as { cards?: Array<{ title?: string; subtitle?: string; progress?: number; synthesisId?: string }> };
+        const cards = Array.isArray(insightsData?.cards) ? insightsData.cards : [];
+        setInsightCards(
+          cards.map((c) => ({
+            title: typeof c.title === 'string' ? c.title : 'Keep going!',
+            subtitle: typeof c.subtitle === 'string' ? c.subtitle : '',
+            progress: typeof c.progress === 'number' && c.progress >= 0 && c.progress <= 100 ? c.progress : 50,
+            synthesisId: typeof c.synthesisId === 'string' ? c.synthesisId : undefined,
+          }))
+        );
+      } catch {
+        if (!cancelled) {
+          setInsightsError(true);
+          setHasSyntheses(null);
+          setInsightCards([]);
+        }
+      } finally {
+        if (!cancelled) setInsightsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -544,68 +589,152 @@ export function Dashboard() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {insights.map((insight, index) => (
+          {insightsLoading && (
+            <div className="md:col-span-3 rounded-2xl bg-card border border-slate-200 p-8 text-center text-muted-foreground">
+              Loading insights…
+            </div>
+          )}
+          {!insightsLoading && insightsError && (
+            <div className="md:col-span-3 rounded-2xl bg-card border border-slate-200 p-8 text-center text-muted-foreground">
+              Could not load insights. Start by synthesizing a lecture.
+              <motion.button
+                whileHover={{ x: 4 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => navigate('/dashboard/synthesize')}
+                className="mt-4 w-full max-w-xs mx-auto px-4 py-3 bg-gradient-to-r from-[#ffb347] to-[#ff8c42] text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg"
+              >
+                Go to Synthesize
+                <ArrowRight className="w-4 h-4" />
+              </motion.button>
+            </div>
+          )}
+          {!insightsLoading && !insightsError && hasSyntheses === false && (
             <motion.div
-              key={insight.title}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 + index * 0.1 }}
-              whileHover={{ scale: 1.03, y: -6 }}
-              className="relative overflow-hidden rounded-2xl bg-card border border-slate-200 p-6 hover:border-[#ffb347]/50 transition-all group cursor-pointer shadow-sm"
+              className="md:col-span-3 rounded-2xl bg-card border border-slate-200 p-6 hover:border-[#ffb347]/50 transition-all shadow-sm"
             >
-              {/* Progress Ring */}
               <div className="flex items-start gap-4 mb-4">
                 <div className="relative w-20 h-20 flex-shrink-0">
                   <svg className="w-20 h-20 transform -rotate-90">
-                    <circle
-                      cx="40"
-                      cy="40"
-                      r="32"
-                      stroke="currentColor"
-                      strokeWidth="6"
-                      fill="none"
-                      className="text-slate-700"
-                    />
-                    <circle
-                      cx="40"
-                      cy="40"
-                      r="32"
-                      stroke="url(#gradient)"
-                      strokeWidth="6"
-                      fill="none"
-                      strokeDasharray={`${2 * Math.PI * 32}`}
-                      strokeDashoffset={`${2 * Math.PI * 32 * (1 - insight.progress / 100)}`}
-                      className="transition-all duration-1000"
-                      strokeLinecap="round"
-                    />
+                    <circle cx="40" cy="40" r="32" stroke="currentColor" strokeWidth="6" fill="none" className="text-slate-700" />
+                    <circle cx="40" cy="40" r="32" stroke="url(#gradient-begin)" strokeWidth="6" fill="none" strokeDasharray={`${2 * Math.PI * 32}`} strokeDashoffset={`${2 * Math.PI * 32 * 0.5}`} className="transition-all duration-1000" strokeLinecap="round" />
                     <defs>
-                      <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" className={`text-${insight.color}-500`} stopColor="currentColor" />
-                        <stop offset="100%" className={`text-${insight.color}-600`} stopColor="currentColor" />
+                      <linearGradient id="gradient-begin" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="#ffb347" />
+                        <stop offset="100%" stopColor="#ff8c42" />
                       </linearGradient>
                     </defs>
                   </svg>
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <span className={`text-lg font-bold text-${insight.color}-400`}>{insight.progress}%</span>
+                    <span className="text-lg font-bold text-amber-400">0%</span>
                   </div>
                 </div>
-
                 <div className="flex-1">
-                  <h3 className="font-bold text-foreground mb-1 text-lg">{insight.title}</h3>
-                  <p className="text-sm text-muted-foreground">{insight.subtitle}</p>
+                  <h3 className="font-bold text-foreground mb-1 text-lg">Begin your journey here!</h3>
+                  <p className="text-sm text-muted-foreground">Upload a lecture to synthesize and get personalized insights.</p>
                 </div>
               </div>
-
-              <motion.button
-                whileHover={{ x: 4 }}
-                whileTap={{ scale: 0.95 }}
-                className={`w-full px-4 py-3 bg-gradient-to-r ${insight.bgGradient} text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg group-hover:shadow-xl transition-all`}
-              >
-                {insight.action}
-                <ArrowRight className="w-4 h-4" />
-              </motion.button>
+              <div className="flex flex-wrap gap-2">
+                <motion.button
+                  whileHover={{ x: 4 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => navigate('/dashboard/synthesize')}
+                  className="flex-1 min-w-[140px] px-4 py-3 bg-gradient-to-r from-[#ffb347] to-[#ff8c42] text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg"
+                >
+                  Continue Learning
+                </motion.button>
+                <motion.button
+                  whileHover={{ x: 4 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => navigate('/dashboard/gaps')}
+                  className="flex-1 min-w-[120px] px-4 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg"
+                >
+                  Fill Gap
+                </motion.button>
+                <motion.button
+                  whileHover={{ x: 4 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => navigate('/dashboard/coach')}
+                  className="flex-1 min-w-[100px] px-4 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg"
+                >
+                  Review
+                </motion.button>
+              </div>
             </motion.div>
-          ))}
+          )}
+          {!insightsLoading && !insightsError && hasSyntheses === true && insightCards.length === 0 && (
+            <div className="md:col-span-3 rounded-2xl bg-card border border-slate-200 p-6 text-center">
+              <p className="text-muted-foreground mb-4">Your syntheses are ready. Keep learning!</p>
+              <div className="flex flex-wrap gap-2 justify-center">
+                <motion.button whileHover={{ x: 4 }} whileTap={{ scale: 0.95 }} onClick={() => navigate('/dashboard/synthesize')} className="px-4 py-3 bg-gradient-to-r from-[#ffb347] to-[#ff8c42] text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg">Continue Learning</motion.button>
+                <motion.button whileHover={{ x: 4 }} whileTap={{ scale: 0.95 }} onClick={() => navigate('/dashboard/gaps')} className="px-4 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl font-bold">Fill Gap</motion.button>
+                <motion.button whileHover={{ x: 4 }} whileTap={{ scale: 0.95 }} onClick={() => navigate('/dashboard/coach')} className="px-4 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-bold">Review</motion.button>
+              </div>
+            </div>
+          )}
+          {!insightsLoading && !insightsError && hasSyntheses === true && insightCards.length > 0 && insightCards.map((insight, index) => {
+            const style = INSIGHT_CARD_GRADIENTS[index % INSIGHT_CARD_GRADIENTS.length];
+            const gradId = `insight-grad-${index}`;
+            return (
+              <motion.div
+                key={`${insight.title}-${index}`}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 + index * 0.1 }}
+                whileHover={{ scale: 1.03, y: -6 }}
+                className="relative overflow-hidden rounded-2xl bg-card border border-slate-200 p-6 hover:border-[#ffb347]/50 transition-all group shadow-sm"
+              >
+                <div className="flex items-start gap-4 mb-4">
+                  <div className="relative w-20 h-20 flex-shrink-0">
+                    <svg className="w-20 h-20 transform -rotate-90">
+                      <circle cx="40" cy="40" r="32" stroke="currentColor" strokeWidth="6" fill="none" className="text-slate-700" />
+                      <circle cx="40" cy="40" r="32" stroke={`url(#${gradId})`} strokeWidth="6" fill="none" strokeDasharray={`${2 * Math.PI * 32}`} strokeDashoffset={`${2 * Math.PI * 32 * (1 - insight.progress / 100)}`} className="transition-all duration-1000" strokeLinecap="round" />
+                      <defs>
+                        <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stopColor={style.stopColors[0]} />
+                          <stop offset="100%" stopColor={style.stopColors[1]} />
+                        </linearGradient>
+                      </defs>
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className={`text-lg font-bold ${style.progressColor}`}>{insight.progress}%</span>
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-bold text-foreground mb-1 text-lg">{insight.title}</h3>
+                    <p className="text-sm text-muted-foreground">{insight.subtitle}</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <motion.button
+                    whileHover={{ x: 4 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => navigate('/dashboard/synthesize', insight.synthesisId ? { state: { openSynthesisId: insight.synthesisId } } : undefined)}
+                    className={`flex-1 min-w-[140px] px-4 py-3 bg-gradient-to-r ${style.bgGradient} text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg`}
+                  >
+                    Continue Learning
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ x: 4 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => navigate('/dashboard/gaps')}
+                    className="flex-1 min-w-[120px] px-4 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg"
+                  >
+                    Fill Gap
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ x: 4 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => navigate('/dashboard/coach')}
+                    className="flex-1 min-w-[100px] px-4 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg"
+                  >
+                    Review
+                  </motion.button>
+                </div>
+              </motion.div>
+            );
+          })}
         </div>
       </div>
 

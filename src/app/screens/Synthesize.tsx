@@ -266,6 +266,7 @@ export function Synthesize() {
       fromGaps?: boolean;
       gapDescription?: string;
       topicsFromGaps?: Topic[];
+      openSynthesisId?: string;
     } | null;
   };
   const navigate = useNavigate();
@@ -322,8 +323,12 @@ export function Synthesize() {
         location.state.gapDescription,
       );
     }
+    const openId = location.state?.openSynthesisId;
+    if (openId && user?.id) {
+      void loadSynthesisById(openId);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.state]);
+  }, [location.state, user?.id]);
 
   const getCombinedMaterials = useCallback(async (): Promise<string> => {
     const parts: string[] = [];

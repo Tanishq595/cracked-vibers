@@ -36,6 +36,7 @@ import gapsAddressedHandler from './api/gaps-addressed'
 import youtubeWatchHistoryHandler from './api/youtube-watch-history'
 import streakRecordHandler from './api/streak-record'
 import streakGetHandler from './api/streak-get'
+import insightsHandler from './api/insights'
 
 function readBody(nodeReq: Connect.IncomingMessage): Promise<Record<string, unknown> | null> {
   return new Promise((resolve, reject) => {
@@ -89,6 +90,7 @@ const API_HANDLERS: Record<string, (req: Connect.IncomingMessage, res: Connect.S
   '/api/youtube-watch-history': runVercelHandlerWithBody(youtubeWatchHistoryHandler),
   '/api/streak-record': runVercelHandlerWithBody(streakRecordHandler),
   '/api/streak-get': runVercelHandlerWithBody(streakGetHandler),
+  '/api/insights': runVercelHandlerWithBody(insightsHandler),
 }
 
 type VercelReq = {
