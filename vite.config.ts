@@ -1,57 +1,82 @@
+import 'dotenv/config'
 import { defineConfig } from 'vite'
 import path from 'path'
+import type { Connect } from 'vite'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
-import { handleInitUser } from './server/init-user'
-import { handleDbTest } from './server/db-test'
+import initUserHandler from './api/init-user'
+import dbTestHandler from './api/db-test'
+import meHandler from './api/me'
+import healthHandler from './api/health'
+
+const API_HANDLERS: Record<string, (req: Connect.IncomingMessage, res: Connect.ServerResponse) => Promise<void>> = {
+  '/api/init-user': runVercelHandler(initUserHandler),
+  '/api/db-test': runVercelHandler(dbTestHandler),
+  '/api/me': runVercelHandler(meHandler),
+  '/api/health': runVercelHandler(healthHandler),
+}
+
+function runVercelHandler(
+  handler: (req: { method?: string; headers: Record<string, string | string[] | undefined> }, res: { status: (n: number) => { json: (b: object) => void } }) => Promise<void>
+) {
+  return async (nodeReq: Connect.IncomingMessage, nodeRes: Connect.ServerResponse) => {
+    const req = {
+      method: nodeReq.method,
+      headers: nodeReq.headers as Record<string, string | string[] | undefined>,
+    }
+    const res = {
+      status(code: number) {
+        nodeRes.statusCode = code
+        return {
+          json(body: object) {
+            nodeRes.setHeader('Content-Type', 'application/json')
+            nodeRes.end(JSON.stringify(body))
+          },
+        }
+      },
+    }
+    await handler(req, res)
+  }
+}
 
 export default defineConfig({
   plugins: [
-    // The React and Tailwind plugins are both required for Make, even if
-    // Tailwind is not being actively used – do not remove them
     react(),
     tailwindcss(),
-    // Handle /api in dev (init-user, db-test) without a separate backend
     {
-      name: 'api-handlers',
+      name: 'api-dev',
       configureServer(server) {
-        server.middlewares.use(async (req, res, next) => {
-          const url = req.url?.split('?')[0]
-          if (url === '/api/init-user' && req.method === 'POST') {
-            const auth = req.headers.authorization ?? null
-            const { status, body } = await handleInitUser(auth)
-            res.statusCode = status
-            res.setHeader('Content-Type', 'application/json')
-            res.end(JSON.stringify(body))
-            return
+        server.middlewares.use(async (nodeReq: Connect.IncomingMessage, nodeRes: Connect.ServerResponse, next: Connect.NextFunction) => {
+          const url = nodeReq.url?.split('?')[0] ?? ''
+          const run = API_HANDLERS[url]
+          if (!run) return next()
+          try {
+            await run(nodeReq, nodeRes)
+          } catch (err) {
+            console.error('[api-dev]', err)
+            nodeRes.statusCode = 500
+            nodeRes.setHeader('Content-Type', 'application/json')
+            nodeRes.end(JSON.stringify({ error: 'Internal server error' }))
           }
-          if (url === '/api/db-test' && req.method === 'GET') {
-            const { status, body } = await handleDbTest()
-            res.statusCode = status
-            res.setHeader('Content-Type', 'application/json')
-            res.end(JSON.stringify(body))
-            return
-          }
-          next()
         })
       },
     },
   ],
   resolve: {
     alias: {
-      // Alias @ to the src directory
       '@': path.resolve(__dirname, './src'),
     },
   },
 
-  // Proxy other /api requests to a backend (e.g. Next.js on 3000). /api/init-user is handled above in dev.
   server: {
-    proxy: {
-      '/api': {
-        target: process.env.VITE_API_URL || 'http://localhost:3000',
-        changeOrigin: true,
-      },
-    },
+    proxy: process.env.VITE_API_URL
+      ? {
+          '/api': {
+            target: process.env.VITE_API_URL,
+            changeOrigin: true,
+          },
+        }
+      : undefined,
   },
 
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
