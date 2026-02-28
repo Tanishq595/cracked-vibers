@@ -59,6 +59,9 @@ import cardReviewDueHandler from './api/card-review-due'
 import knowledgeGraphHandler from './api/knowledge-graph'
 import knowledgeGraphMergeHandler from './api/knowledge-graph-merge'
 import knowledgeGraphBackfillHandler from './api/knowledge-graph-backfill'
+import studySessionHandler from './api/study-session'
+import weekStatsHandler from './api/week-stats'
+import weekTopGapsHandler from './api/week-top-gaps'
 
 function readBody(nodeReq: Connect.IncomingMessage): Promise<Record<string, unknown> | null> {
   return new Promise((resolve, reject) => {
@@ -143,6 +146,9 @@ const API_HANDLERS: Record<string, (req: Connect.IncomingMessage, res: Connect.S
   '/api/knowledge-graph': runVercelHandlerWithBody(knowledgeGraphHandler),
   '/api/knowledge-graph-merge': runVercelHandlerWithBody(knowledgeGraphMergeHandler),
   '/api/knowledge-graph-backfill': runVercelHandlerWithBody(knowledgeGraphBackfillHandler),
+  '/api/study-session': runVercelHandlerWithBody(studySessionHandler),
+  '/api/week-stats': runVercelHandlerWithBody(weekStatsHandler),
+  '/api/week-top-gaps': runVercelHandlerWithBody(weekTopGapsHandler),
 }
 
 type VercelReq = {

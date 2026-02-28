@@ -21,6 +21,7 @@ import {
   Trophy,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useStudySession } from '../hooks/useStudySession';
 
 const navItems = [
   { path: '/dashboard', label: 'Home', icon: LayoutDashboard },
@@ -40,6 +41,7 @@ export function Layout() {
   const { signOut } = useClerk();
   const { user } = useUser();
   const { getToken } = useAuth();
+  useStudySession(user?.id ?? null);
   const [youtubeConnected, setYoutubeConnected] = useState<boolean | null>(null);
   const [classroomConnected, setClassroomConnected] = useState<boolean | null>(null);
   const [notionConnected, setNotionConnected] = useState<boolean | null>(null);

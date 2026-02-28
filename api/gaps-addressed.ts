@@ -41,6 +41,23 @@ export default async function handler(
 
   try {
     if (addressedIds !== undefined) {
+      const { data: existing } = await supabase
+        .from("user_gap_addressed")
+        .select("addressed_gap_ids")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      const prevRaw = (existing as { addressed_gap_ids?: unknown } | null)
+        ?.addressed_gap_ids;
+      const prevSet = new Set(
+        Array.isArray(prevRaw)
+          ? (prevRaw as unknown[]).filter(
+              (id): id is string => typeof id === "string"
+            )
+          : []
+      );
+      const newIds = addressedIds.filter((id) => !prevSet.has(id));
+
       const { error } = await supabase
         .from("user_gap_addressed")
         .upsert(
@@ -56,6 +73,17 @@ export default async function handler(
         console.error("[gaps-addressed] Supabase upsert error:", error);
         res.status(500).json({ error: "Failed to save addressed gaps" });
         return;
+      }
+
+      if (newIds.length > 0) {
+        const now = new Date().toISOString();
+        await supabase.from("user_gap_addressed_events").insert(
+          newIds.map((gap_id) => ({
+            user_id: userId,
+            gap_id,
+            addressed_at: now,
+          }))
+        );
       }
     }
 

@@ -23,11 +23,9 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useRef, Component, useCallback, type ReactNode } from "react";
 import { useAuth, useUser } from "@clerk/clerk-react";
-import { useNavigate, useSearchParams } from 'react-router';
+import { useNavigate, useSearchParams, Link } from "react-router";
 import { KnowledgeGraph } from "../components/KnowledgeGraph";
 import { ChatbotGLB } from "../components/ChatbotGLB";
-import { useNavigate, Link } from "react-router";
-import { useTopGaps } from "./GapAnalysis";
 import {
   Dialog,
   DialogContent,
@@ -235,7 +233,16 @@ export function Dashboard() {
   const { getToken } = useAuth();
   const { user } = useUser();
   const userId = user?.id ?? null;
-  const { gaps: topGaps, loading: gapsLoading } = useTopGaps(3);
+  const [weekStats, setWeekStats] = useState<{
+    studyTimeMinutes: number;
+    studyTimeLastWeekMinutes: number;
+    topicsMasteredThisWeek: number;
+    gapsClosedThisWeek: number;
+    topicsGoal: number;
+  } | null>(null);
+  const [weekStatsLoading, setWeekStatsLoading] = useState(true);
+  const [weekTopGaps, setWeekTopGaps] = useState<Array<{ id: string; description: string; topics: Array<{ id: string; label: string }> }>>([]);
+  const [weekTopGapsLoading, setWeekTopGapsLoading] = useState(true);
   const [searchFocused, setSearchFocused] = useState(false);
   const [showAI, setShowAI] = useState(true);
   const [mascotReady, setMascotReady] = useState(false);
@@ -321,6 +328,68 @@ export function Dashboard() {
       });
     return () => { cancelled = true; };
   }, [userId, fetchGraph]);
+
+  useEffect(() => {
+    if (!userId) {
+      setWeekStats(null);
+      setWeekStatsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setWeekStatsLoading(true);
+    fetch("/api/week-stats", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (data.studyTimeMinutes !== undefined) {
+          setWeekStats({
+            studyTimeMinutes: data.studyTimeMinutes ?? 0,
+            studyTimeLastWeekMinutes: data.studyTimeLastWeekMinutes ?? 0,
+            topicsMasteredThisWeek: data.topicsMasteredThisWeek ?? 0,
+            gapsClosedThisWeek: data.gapsClosedThisWeek ?? 0,
+            topicsGoal: data.topicsGoal ?? 10,
+          });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setWeekStats(null);
+      })
+      .finally(() => {
+        if (!cancelled) setWeekStatsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  useEffect(() => {
+    if (!userId) {
+      setWeekTopGaps([]);
+      setWeekTopGapsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setWeekTopGapsLoading(true);
+    fetch("/api/week-top-gaps", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, limit: 3 }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        setWeekTopGaps(Array.isArray(data?.gaps) ? data.gaps : []);
+      })
+      .catch(() => {
+        if (!cancelled) setWeekTopGaps([]);
+      })
+      .finally(() => {
+        if (!cancelled) setWeekTopGapsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [userId]);
 
   useEffect(() => {
     if (!userId) {
@@ -1146,10 +1215,31 @@ export function Dashboard() {
                 <span className="text-sm text-muted-foreground">Study Time</span>
                 <TrendingUp className="h-4 w-4 text-emerald-400" />
               </div>
-              <p className="text-3xl font-bold text-foreground">12.5h</p>
-              <p className="mt-1 text-xs font-semibold text-emerald-400">
-                +25% from last week
-              </p>
+              {weekStatsLoading ? (
+                <p className="text-3xl font-bold text-foreground">—</p>
+              ) : (
+                <>
+                  <p className="text-3xl font-bold text-foreground">
+                    {weekStats
+                      ? weekStats.studyTimeMinutes < 60
+                        ? `${weekStats.studyTimeMinutes}m`
+                        : `${(weekStats.studyTimeMinutes / 60).toFixed(1)}h`
+                      : "0m"}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-emerald-400">
+                    {weekStats?.studyTimeLastWeekMinutes
+                      ? (() => {
+                          const pct = Math.round(
+                            ((weekStats.studyTimeMinutes - weekStats.studyTimeLastWeekMinutes) /
+                              weekStats.studyTimeLastWeekMinutes) *
+                              100
+                          );
+                          return pct >= 0 ? `+${pct}% from last week` : `${pct}% from last week`;
+                        })()
+                      : "Start studying to see progress"}
+                  </p>
+                </>
+              )}
             </div>
 
             <div className="rounded-xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 p-4">
@@ -1157,10 +1247,22 @@ export function Dashboard() {
                 <span className="text-sm text-muted-foreground">Topics Mastered</span>
                 <CheckCircle2 className="h-4 w-4 text-emerald-400" />
               </div>
-              <p className="text-3xl font-bold text-foreground">7</p>
-              <p className="mt-1 text-xs font-semibold text-amber-400">
-                3 more to go!
-              </p>
+              {weekStatsLoading ? (
+                <p className="text-3xl font-bold text-foreground">—</p>
+              ) : (
+                <>
+                  <p className="text-3xl font-bold text-foreground">
+                    {weekStats?.topicsMasteredThisWeek ?? 0}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-amber-400">
+                    {weekStats
+                      ? Math.max(0, weekStats.topicsGoal - weekStats.topicsMasteredThisWeek) > 0
+                        ? `${Math.max(0, weekStats.topicsGoal - weekStats.topicsMasteredThisWeek)} more to go!`
+                        : "Goal reached!"
+                      : "Synthesize to add topics"}
+                  </p>
+                </>
+              )}
             </div>
 
             <div className="rounded-xl border border-amber-500/20 bg-gradient-to-br from-amber-500/10 to-orange-500/10 p-4">
@@ -1168,10 +1270,18 @@ export function Dashboard() {
                 <span className="text-sm text-muted-foreground">Gaps Closed</span>
                 <Flame className="h-4 w-4 text-amber-400" />
               </div>
-              <p className="text-3xl font-bold text-foreground">3</p>
-              <p className="mt-1 text-xs font-semibold text-[#ffb347]">
-                Keep the momentum!
-              </p>
+              {weekStatsLoading ? (
+                <p className="text-3xl font-bold text-foreground">—</p>
+              ) : (
+                <>
+                  <p className="text-3xl font-bold text-foreground">
+                    {weekStats?.gapsClosedThisWeek ?? 0}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-[#ffb347]">
+                    {weekStats?.gapsClosedThisWeek ? "Keep the momentum!" : "Mark gaps addressed on the Gaps page"}
+                  </p>
+                </>
+              )}
             </div>
           </div>
         </motion.div>
@@ -1196,15 +1306,15 @@ export function Dashboard() {
               <ChevronRight className="h-3 w-3" />
             </button>
           </div>
-          {gapsLoading ? (
+          {weekTopGapsLoading ? (
             <p className="text-xs text-muted-foreground">Scanning your syntheses…</p>
-          ) : topGaps.length === 0 ? (
+          ) : weekTopGaps.length === 0 ? (
             <p className="text-xs text-muted-foreground">
               Synthesize some materials to surface your knowledge gaps.
             </p>
           ) : (
             <ul className="space-y-2">
-              {topGaps.map((gap) => (
+              {weekTopGaps.map((gap) => (
                 <li
                   key={gap.id}
                   className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-xs text-foreground dark:border-slate-700 dark:bg-slate-900/40"
