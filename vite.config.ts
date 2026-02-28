@@ -71,14 +71,13 @@ export default defineConfig({
   },
 
   server: {
-    proxy: process.env.VITE_API_URL
-      ? {
-          '/api': {
-            target: process.env.VITE_API_URL,
-            changeOrigin: true,
-          },
-        }
-      : undefined,
+    port: 3000,
+    proxy: {
+      '/api': {
+        target: process.env.VITE_API_URL || 'http://localhost:3000',
+        changeOrigin: true,
+      },
+    },
   },
 
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
