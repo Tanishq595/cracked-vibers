@@ -11,11 +11,17 @@ import healthHandler from './api/health'
 import storageUploadUrlHandler from './api/storage-upload-url'
 import storageDeleteHandler from './api/storage-delete'
 import storageListHandler from './api/storage-list'
+import storageDownloadUrlHandler from './api/storage-download-url'
 import chatHandler from './api/chat'
 import synthesizeHandler from './api/synthesize'
 import narrateHandler from './api/narrate'
 import videoHandler from './api/video'
 import musicHandler from './api/music'
+import masteryGetHandler from './api/mastery-get'
+import masteryUpdateHandler from './api/mastery-update'
+import questionsHandler from './api/questions'
+import synthesesListHandler from './api/syntheses-list'
+import synthesisGetHandler from './api/synthesis-get'
 
 function readBody(nodeReq: Connect.IncomingMessage): Promise<Record<string, unknown> | null> {
   return new Promise((resolve, reject) => {
@@ -45,11 +51,17 @@ const API_HANDLERS: Record<string, (req: Connect.IncomingMessage, res: Connect.S
   '/api/storage-upload-url': runVercelHandlerWithBody(storageUploadUrlHandler),
   '/api/storage-delete': runVercelHandlerWithBody(storageDeleteHandler),
   '/api/storage-list': runVercelHandlerWithBody(storageListHandler),
+  '/api/storage-download-url': runVercelHandlerWithBody(storageDownloadUrlHandler),
   '/api/chat': runVercelHandlerWithBody(chatHandler),
   '/api/synthesize': runVercelHandlerWithBody(synthesizeHandler),
   '/api/narrate': runVercelHandlerWithBody(narrateHandler),
   '/api/video': runVercelHandlerWithBody(videoHandler),
   '/api/music': runVercelHandlerWithBody(musicHandler),
+  '/api/mastery-get': runVercelHandlerWithBody(masteryGetHandler),
+  '/api/mastery-update': runVercelHandlerWithBody(masteryUpdateHandler),
+  '/api/questions': runVercelHandlerWithBody(questionsHandler),
+  '/api/syntheses-list': runVercelHandlerWithBody(synthesesListHandler),
+  '/api/synthesis-get': runVercelHandlerWithBody(synthesisGetHandler),
 }
 
 type VercelReq = {

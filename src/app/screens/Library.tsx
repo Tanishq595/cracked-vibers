@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useUser } from "@clerk/clerk-react";
 import { motion, AnimatePresence } from "motion/react";
 import { FolderOpen, FileText, Loader2, RefreshCw, UploadCloud, Trash2 } from "lucide-react";
+import { useNavigate } from "react-router";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +31,9 @@ export function Library() {
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+  const [synthLoading, setSynthLoading] = useState(false);
+  const navigate = useNavigate();
 
   const prefix = user?.id ? `uploads/${user.id}` : "uploads";
 
@@ -53,6 +57,7 @@ export function Library() {
         return db - da;
       });
       setItems(items);
+      setSelectedKeys((prev) => prev.filter((k) => items.some((it) => it.key === k)));
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Something went wrong";
       setError(msg);
@@ -74,8 +79,54 @@ export function Library() {
         body: JSON.stringify({ objectKey: item.key }),
       });
       setItems((prev) => prev.filter((it) => it.key !== item.key));
+      setSelectedKeys((prev) => prev.filter((k) => k !== item.key));
     } catch {
       // Ignore; user can retry via refresh
+    }
+  }
+
+  function toggleSelected(key: string) {
+    setSelectedKeys((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+  }
+
+  async function synthesizeSelected() {
+    if (!selectedKeys.length) return;
+    setSynthLoading(true);
+    try {
+      const selectedItems = items.filter((it) => selectedKeys.includes(it.key));
+      const parts: string[] = [];
+      for (const item of selectedItems) {
+        const name = item.key.split("/").pop() || item.key;
+        const res = await fetch("/api/storage-download-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ objectKey: item.key }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.url) continue;
+        const fileRes = await fetch(data.url as string);
+        const text = await fileRes.text();
+        if (text && text.trim().length > 0) {
+          parts.push(`# Source: ${name}\n\n${text}`);
+        }
+      }
+
+      const combined = parts.join("\n\n---\n\n");
+      if (!combined.trim()) {
+        setError("Could not read selected files as text.");
+        return;
+      }
+
+      navigate("/dashboard/synthesize", {
+        state: { materialsFromLibrary: combined },
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to prepare synthesis";
+      setError(msg);
+    } finally {
+      setSynthLoading(false);
     }
   }
 
@@ -105,6 +156,19 @@ export function Library() {
               <RefreshCw className="w-4 h-4" />
             )}
             <span className="hidden sm:inline">Refresh</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => void synthesizeSelected()}
+            disabled={!selectedKeys.length || synthLoading}
+            className="inline-flex items-center gap-1 rounded-xl border border-[#ffb347]/40 bg-[#ffb347]/10 px-3 py-2 text-xs font-medium text-[#b4690e] hover:bg-[#ffb347]/20 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {synthLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <span className="text-sm leading-none">Synthesize selected</span>
+            )}
           </button>
 
           <Dialog>
@@ -166,6 +230,14 @@ export function Library() {
                   : "Unknown";
               return (
                 <li key={item.key} className="flex items-center gap-4 px-4 py-3">
+                  <div className="flex-shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={selectedKeys.includes(item.key)}
+                      onChange={() => toggleSelected(item.key)}
+                      className="h-4 w-4 rounded border-slate-300 text-[#ffb347] focus:ring-[#ffb347]"
+                    />
+                  </div>
                   <div className="flex-shrink-0">
                     <FileText className="w-5 h-5 text-slate-500" />
                   </div>
