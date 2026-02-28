@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "react-router";
 import { useUser } from "@clerk/clerk-react";
+import { Info } from "lucide-react";
 import { SpeakingCoach } from "../components/voice/SpeakingCoach";
 import type { CoachContext, CoachMode } from "../components/voice/useConversation";
+import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
 
 type LocationState = {
   topics?: { id: string; label: string }[];
@@ -17,6 +19,7 @@ export function SpeakingCoachScreen() {
 
   const [mode, setMode] = useState<CoachMode>("explain");
   const [timerSeconds, setTimerSeconds] = useState<number | null>(null);
+  const [infoOpen, setInfoOpen] = useState(false);
 
   const coachContext: CoachContext | null = state
     ? {
@@ -61,6 +64,33 @@ export function SpeakingCoachScreen() {
 
       <div className="flex flex-wrap items-center gap-4">
         <span className="text-sm text-muted-foreground">Mode:</span>
+        <Popover open={infoOpen} onOpenChange={setInfoOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              onClick={() => setInfoOpen((o) => !o)}
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-muted-foreground/30 text-muted-foreground hover:border-muted-foreground/50 hover:text-foreground"
+              aria-label="What do these modes mean?"
+              title="What do these modes mean?"
+            >
+              <Info className="h-4 w-4" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-80 sm:w-96 text-left" align="start">
+            <p className="font-medium mb-2">What each mode does</p>
+            <ul className="space-y-3 text-sm text-muted-foreground">
+              <li>
+                <span className="font-medium text-foreground">Explain topics</span> — The coach explains concepts and answers your questions. Best for learning new material before you speak about it.
+              </li>
+              <li>
+                <span className="font-medium text-foreground">Teach back gaps</span> — You explain a topic in your own words; the coach spots gaps and asks follow-ups so you strengthen weak spots.
+              </li>
+              <li>
+                <span className="font-medium text-foreground">Exam style</span> — Timed, exam-like practice with less hand-holding. Use &quot;Start 3-min timer&quot; for a timed speaking slot.
+              </li>
+            </ul>
+          </PopoverContent>
+        </Popover>
         {(["explain", "gaps", "exam"] as const).map((m) => (
           <button
             key={m}
