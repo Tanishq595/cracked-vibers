@@ -9,24 +9,100 @@ import dbTestHandler from './api/db-test'
 import meHandler from './api/me'
 import healthHandler from './api/health'
 import storageUploadUrlHandler from './api/storage-upload-url'
+import storageDeleteHandler from './api/storage-delete'
+import storageListHandler from './api/storage-list'
+import chatHandler from './api/chat'
+import synthesizeHandler from './api/synthesize'
+import narrateHandler from './api/narrate'
+import videoHandler from './api/video'
+import musicHandler from './api/music'
+
+function readBody(nodeReq: Connect.IncomingMessage): Promise<Record<string, unknown> | null> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = []
+    nodeReq.on('data', (chunk: Buffer) => chunks.push(chunk))
+    nodeReq.on('end', () => {
+      const raw = Buffer.concat(chunks).toString('utf8')
+      if (!raw.trim()) {
+        resolve(null)
+        return
+      }
+      try {
+        resolve(JSON.parse(raw) as Record<string, unknown>)
+      } catch {
+        resolve(null)
+      }
+    })
+    nodeReq.on('error', reject)
+  })
+}
 
 const API_HANDLERS: Record<string, (req: Connect.IncomingMessage, res: Connect.ServerResponse) => Promise<void>> = {
   '/api/init-user': runVercelHandler(initUserHandler),
   '/api/db-test': runVercelHandler(dbTestHandler),
   '/api/me': runVercelHandler(meHandler),
   '/api/health': runVercelHandler(healthHandler),
-  '/api/storage-upload-url': runVercelHandler(storageUploadUrlHandler),
+  '/api/storage-upload-url': runVercelHandlerWithBody(storageUploadUrlHandler),
+  '/api/storage-delete': runVercelHandlerWithBody(storageDeleteHandler),
+  '/api/storage-list': runVercelHandlerWithBody(storageListHandler),
+  '/api/chat': runVercelHandlerWithBody(chatHandler),
+  '/api/synthesize': runVercelHandlerWithBody(synthesizeHandler),
+  '/api/narrate': runVercelHandlerWithBody(narrateHandler),
+  '/api/video': runVercelHandlerWithBody(videoHandler),
+  '/api/music': runVercelHandlerWithBody(musicHandler),
 }
 
-function runVercelHandler(
-  handler: (req: { method?: string; headers: Record<string, string | string[] | undefined> }, res: { status: (n: number) => { json: (b: object) => void } }) => Promise<void>
-) {
+type VercelReq = {
+  method?: string
+  headers: Record<string, string | string[] | undefined>
+  body?: unknown
+  query?: Record<string, string | string[] | undefined>
+}
+type VercelRes = { status: (n: number) => { json: (b: object) => void } }
+
+function runVercelHandler(handler: (req: VercelReq, res: VercelRes) => Promise<void>) {
   return async (nodeReq: Connect.IncomingMessage, nodeRes: Connect.ServerResponse) => {
-    const req = {
+    const req: VercelReq = {
       method: nodeReq.method,
       headers: nodeReq.headers as Record<string, string | string[] | undefined>,
     }
-    const res = {
+    const res: VercelRes = {
+      status(code: number) {
+        nodeRes.statusCode = code
+        return {
+          json(body: object) {
+            nodeRes.setHeader('Content-Type', 'application/json')
+            nodeRes.end(JSON.stringify(body))
+          },
+        }
+      },
+    }
+    await handler(req, res)
+  }
+}
+
+function runVercelHandlerWithBody(handler: (req: VercelReq, res: VercelRes) => Promise<void>) {
+  return async (nodeReq: Connect.IncomingMessage, nodeRes: Connect.ServerResponse) => {
+    let body: Record<string, unknown> | null = null
+    if (nodeReq.method === 'POST' || nodeReq.method === 'PUT' || nodeReq.method === 'PATCH') {
+      body = await readBody(nodeReq)
+    }
+    const url = nodeReq.url ?? ''
+    const q = url.includes('?') ? url.split('?')[1] : ''
+    const query: Record<string, string | string[]> = {}
+    if (q) {
+      for (const part of q.split('&')) {
+        const [k, v] = part.split('=')
+        if (k) query[decodeURIComponent(k)] = v ? decodeURIComponent(v) : ''
+      }
+    }
+    const req: VercelReq = {
+      method: nodeReq.method,
+      headers: nodeReq.headers as Record<string, string | string[] | undefined>,
+      body: body ?? undefined,
+      query,
+    }
+    const res: VercelRes = {
       status(code: number) {
         nodeRes.statusCode = code
         return {

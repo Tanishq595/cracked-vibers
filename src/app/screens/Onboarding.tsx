@@ -1,7 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router';
-import { useAuth } from '@clerk/clerk-react';
 import { 
   CheckCircle2, 
   Youtube, 
@@ -11,34 +10,15 @@ import {
   Loader2,
   ArrowRight,
   Brain,
-  Sparkles
+  Sparkles,
+  Circle
 } from 'lucide-react';
-
-const API_BASE = import.meta.env.VITE_API_URL ?? '';
 
 export function Onboarding() {
   const [step, setStep] = useState(1);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [connected, setConnected] = useState<string[]>([]);
   const navigate = useNavigate();
-  const { isLoaded, isSignedIn, getToken } = useAuth();
-  const syncedRef = useRef(false);
-
-  // Sync signed-in user to app_users as soon as they land on onboarding (right after signup)
-  useEffect(() => {
-    if (!isLoaded || !isSignedIn || syncedRef.current) return;
-    syncedRef.current = true;
-    getToken()
-      .then((token) => {
-        if (!token) return;
-        return fetch(`${API_BASE}/api/init-user`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-          credentials: 'include',
-        });
-      })
-      .catch((err) => console.warn('init-user sync failed:', err));
-  }, [isLoaded, isSignedIn, getToken]);
 
   const handleConnect = (platform: string) => {
     setConnecting(platform);
@@ -74,8 +54,8 @@ export function Onboarding() {
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 relative overflow-hidden">
       {/* Background Decorations */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-        <div className="absolute top-[-20%] left-[20%] w-[60%] h-[60%] bg-indigo-200/30 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-[-20%] right-[20%] w-[60%] h-[60%] bg-blue-200/30 rounded-full blur-3xl" />
+        <div className="absolute top-[-20%] left-[20%] w-[60%] h-[60%] bg-[#ffb347]/30 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-[-20%] right-[20%] w-[60%] h-[60%] bg-[#ffb347]/30 rounded-full blur-3xl" />
       </div>
 
       <div className="w-full max-w-2xl relative z-10">
@@ -88,7 +68,7 @@ export function Onboarding() {
           </div>
           <div className="h-3 bg-slate-200 rounded-full overflow-hidden border border-slate-300">
             <motion.div 
-              className="h-full bg-gradient-to-r from-indigo-600 to-blue-600"
+              className="h-full bg-[#ffb347]"
               initial={{ width: "0%" }}
               animate={{ width: step === 1 ? "33%" : step === 2 ? "66%" : "100%" }}
               transition={{ duration: 0.5 }}
@@ -106,14 +86,14 @@ export function Onboarding() {
               className="bg-white rounded-3xl shadow-xl border-2 border-slate-200 p-6 md:p-10"
             >
               <div className="text-center mb-8">
-                <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-600 mb-4 shadow-lg">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[#ffb347] mb-4 shadow-lg">
                   <Brain className="w-8 h-8 text-white" />
                 </div>
                 <h1 className="text-2xl md:text-3xl font-black text-slate-900 mb-2">Connect your learning sources</h1>
                 <p className="text-slate-600 font-medium">We'll organize everything in one place.</p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                 {/* Google Classroom */}
                 <PlatformCard 
                   icon={GraduationCap}
@@ -143,6 +123,16 @@ export function Onboarding() {
                   isConnecting={connecting === 'youtube'}
                   onConnect={() => handleConnect('youtube')}
                 />
+
+                {/* Canvas */}
+                <PlatformCard 
+                  icon={Circle}
+                  name="Canvas"
+                  color="bg-orange-100 text-orange-700 border-orange-200"
+                  isConnected={connected.includes('canvas')}
+                  isConnecting={connecting === 'canvas'}
+                  onConnect={() => handleConnect('canvas')}
+                />
               </div>
 
               <div className="flex flex-col gap-3">
@@ -152,7 +142,7 @@ export function Onboarding() {
                   onClick={handleContinue}
                   className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg ${
                     connected.length > 0 
-                      ? "bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-indigo-500/25 hover:shadow-indigo-500/40" 
+                      ? "bg-[#ffb347] text-white shadow-[#ffb347]/25 hover:shadow-[#ffb347]/40" 
                       : "bg-slate-200 text-slate-500 cursor-not-allowed"
                   }`}
                   disabled={connected.length === 0}
@@ -179,9 +169,9 @@ export function Onboarding() {
               className="bg-white rounded-3xl shadow-xl border-2 border-slate-200 p-10 flex flex-col items-center text-center min-h-[400px] justify-center"
             >
               <div className="relative w-24 h-24 mb-6">
-                <div className="absolute inset-0 border-4 border-indigo-100 rounded-full" />
-                <div className="absolute inset-0 border-4 border-indigo-600 rounded-full border-t-transparent animate-spin" />
-                <Sparkles className="absolute inset-0 m-auto text-indigo-600 w-8 h-8 animate-pulse" />
+                <div className="absolute inset-0 border-4 border-[#ffb347]/30 rounded-full" />
+                <div className="absolute inset-0 border-4 border-[#ffb347] rounded-full border-t-transparent animate-spin" />
+                <Sparkles className="absolute inset-0 m-auto text-[#ffb347] w-8 h-8 animate-pulse" />
               </div>
               
               <h2 className="text-2xl font-black text-slate-900 mb-2">Syncing your learning data...</h2>
@@ -193,6 +183,7 @@ export function Onboarding() {
                 <SyncItem label="Importing Classroom deadlines..." delay={0} />
                 <SyncItem label="Indexing Notion pages..." delay={1} />
                 <SyncItem label="Analyzing YouTube history..." delay={2} />
+                <SyncItem label="Syncing Canvas courses..." delay={3} />
               </div>
             </motion.div>
           )}

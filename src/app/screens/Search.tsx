@@ -23,7 +23,7 @@ const searchResults = [
   {
     category: 'AI-Synthesized',
     icon: Sparkles,
-    color: '#6366F1',
+    color: '#ffb347',
     items: [
       {
         title: 'Cellular Respiration: Complete Overview',
@@ -105,7 +105,7 @@ export function Search() {
         animate={{ opacity: 1, y: 0 }}
         className="text-center mb-8 md:mb-12"
       >
-        <h1 className="text-3xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-indigo-600 via-blue-600 to-cyan-600 bg-clip-text text-transparent">
+        <h1 className="text-3xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-[#ffb347] via-[#ff8c42] to-[#ff6b35] bg-clip-text text-transparent">
           Universal Search
         </h1>
         <p className="text-slate-600 text-base md:text-lg font-medium">
@@ -121,14 +121,14 @@ export function Search() {
         className="mb-6 md:mb-8"
       >
         <div className="relative group">
-          <SearchIcon className="absolute left-4 md:left-6 top-1/2 -translate-y-1/2 w-5 md:w-6 h-5 md:h-6 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
-          <Sparkles className="absolute right-4 md:right-6 top-1/2 -translate-y-1/2 w-5 md:w-6 h-5 md:h-6 text-indigo-400 opacity-60 group-focus-within:opacity-100 transition-opacity hidden md:block" />
+          <SearchIcon className="absolute left-4 md:left-6 top-1/2 -translate-y-1/2 w-5 md:w-6 h-5 md:h-6 text-slate-400 group-focus-within:text-[#ffb347] transition-colors" />
+          <Sparkles className="absolute right-4 md:right-6 top-1/2 -translate-y-1/2 w-5 md:w-6 h-5 md:h-6 text-[#ffb347] opacity-60 group-focus-within:opacity-100 transition-opacity hidden md:block" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => handleSearch(e.target.value)}
             placeholder="What do you want to learn about?"
-            className="w-full pl-12 md:pl-16 pr-12 md:pr-16 py-5 md:py-6 text-lg md:text-xl bg-white hover:bg-slate-50 focus:bg-white border-2 border-slate-200 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 rounded-2xl text-slate-900 placeholder-slate-400 outline-none transition-all shadow-sm focus:shadow-lg"
+            className="w-full pl-12 md:pl-16 pr-12 md:pr-16 py-5 md:py-6 text-lg md:text-xl bg-white hover:bg-slate-50 focus:bg-white border-2 border-slate-200 focus:border-[#ffb347] focus:ring-4 focus:ring-[#ffb347]/20 rounded-2xl text-slate-900 placeholder-slate-400 outline-none transition-all shadow-sm focus:shadow-lg"
           />
         </div>
 
@@ -147,7 +147,7 @@ export function Search() {
                 whileHover={{ scale: 1.05, y: -1 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => handleSearch(suggestion)}
-                className="px-4 py-2 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 rounded-xl text-sm text-slate-700 hover:text-indigo-700 transition-all font-medium shadow-sm"
+                className="px-4 py-2 bg-slate-50 hover:bg-[#ffb347]/10 border border-slate-200 hover:border-[#ffb347]/50 rounded-xl text-sm text-slate-700 hover:text-[#ff8c42] transition-all font-medium shadow-sm"
               >
                 {suggestion}
               </motion.button>
@@ -191,9 +191,9 @@ export function Search() {
                   <div className="flex items-center gap-3">
                     <div 
                       className="w-10 h-10 rounded-xl flex items-center justify-center shadow-sm"
-                      style={{ backgroundColor: `${category.color === '#ffffff' ? '#6366F1' : category.color}20` }}
+                      style={{ backgroundColor: `${category.color === '#ffffff' ? '#ffb347' : category.color}20` }}
                     >
-                      <Icon className="w-5 h-5" style={{ color: category.color === '#ffffff' ? '#6366F1' : category.color }} />
+                      <Icon className="w-5 h-5" style={{ color: category.color === '#ffffff' ? '#ffb347' : category.color }} />
                     </div>
                     <h2 className="text-lg font-bold text-slate-900">{category.category}</h2>
                     <div className="flex-1 h-px bg-slate-200" />
@@ -206,13 +206,13 @@ export function Search() {
                         key={itemIndex}
                         whileHover={{ x: 4, scale: 1.005 }}
                         whileTap={{ scale: 0.98 }}
-                        className="group p-6 rounded-2xl bg-white hover:bg-indigo-50/30 border border-slate-200 hover:border-indigo-300 transition-all cursor-pointer shadow-sm hover:shadow-md"
+                        className="group p-6 rounded-2xl bg-white hover:bg-[#ffb347]/10 border border-slate-200 hover:border-[#ffb347]/50 transition-all cursor-pointer shadow-sm hover:shadow-md"
                       >
                         <div className="flex items-start justify-between mb-3">
-                          <h3 className="text-lg font-bold text-slate-900 group-hover:text-indigo-700 transition-colors flex-1">
+                          <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#ff8c42] transition-colors flex-1">
                             {item.title}
                           </h3>
-                          <ExternalLink className="w-5 h-5 text-slate-400 group-hover:text-indigo-500 transition-colors ml-4" />
+                          <ExternalLink className="w-5 h-5 text-slate-400 group-hover:text-[#ffb347] transition-colors ml-4" />
                         </div>
                         
                         <p className="text-slate-600 text-sm mb-4 font-medium">
@@ -221,7 +221,7 @@ export function Search() {
 
                         <div className="flex flex-wrap items-center gap-3 text-xs font-semibold">
                           {'confidence' in item && (
-                            <span className="flex items-center gap-1 px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-lg">
+                            <span className="flex items-center gap-1 px-3 py-1.5 bg-[#ffb347]/20 text-[#ff8c42] rounded-lg">
                               <TrendingUp className="w-3 h-3" />
                               {item.confidence} confidence
                             </span>
@@ -269,8 +269,8 @@ export function Search() {
           transition={{ delay: 0.3 }}
           className="text-center py-20"
         >
-          <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-indigo-50 to-blue-50 border-2 border-indigo-200 flex items-center justify-center shadow-sm">
-            <SearchIcon className="w-10 h-10 text-indigo-600" />
+          <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-[#ffb347]/20 to-[#ff8c42]/20 border-2 border-[#ffb347]/40 flex items-center justify-center shadow-sm">
+            <SearchIcon className="w-10 h-10 text-[#ffb347]" />
           </div>
           <h3 className="text-xl font-bold mb-2 text-slate-900">Start searching</h3>
           <p className="text-slate-500 font-medium">
