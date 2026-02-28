@@ -69,6 +69,15 @@ type UseUserGapsState = {
   error: string | null;
 };
 
+function stripBasicMarkdown(text: string): string {
+  if (!text || typeof text !== "string") return "";
+  return text
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/_(.*?)_/g, "$1")
+    .trim();
+}
+
 function extractGapsFromMarkdown(markdown: string): string[] {
   if (!markdown) return [];
   const re = /##\s*Knowledge Gaps\s*\n([\s\S]*?)(?=\n##\s|$)/i;
@@ -172,7 +181,7 @@ function useUserGaps(limit?: number): UseUserGapsState {
         const listRes = await fetch("/api/syntheses-list", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId: user.id }),
+          body: JSON.stringify({ userId: user?.id }),
         });
         const listJson = await listRes.json();
         if (!listRes.ok) {
@@ -192,7 +201,7 @@ function useUserGaps(limit?: number): UseUserGapsState {
               const res = await fetch("/api/synthesis-get", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ userId: user.id, synthesisId: item.id }),
+                body: JSON.stringify({ userId: user?.id, synthesisId: item.id }),
               });
               const json = await res.json();
               if (!res.ok) {
@@ -217,7 +226,8 @@ function useUserGaps(limit?: number): UseUserGapsState {
         for (const d of validDetails) {
           const gapLines = extractGapsFromMarkdown(d.markdown);
           for (let i = 0; i < gapLines.length; i++) {
-            const description = gapLines[i];
+            const descriptionRaw = gapLines[i];
+            const description = stripBasicMarkdown(descriptionRaw);
             if (!description) continue;
             instances.push({
               id: `${d.id}#${i}`,
@@ -277,6 +287,9 @@ export function GapAnalysis() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTopicId, setSelectedTopicId] = useState<string>("all");
   const [addressedIds, setAddressedIds] = useState<Set<string>>(new Set());
+  const [addressedOrder, setAddressedOrder] = useState<"unaddressed-first" | "addressed-first">(
+    "unaddressed-first",
+  );
 
   const allTopics = useMemo(() => {
     const map = new Map<string, string>();
@@ -290,8 +303,7 @@ export function GapAnalysis() {
 
   const filteredGaps = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return gaps.filter((gap) => {
-      if (addressedIds.has(gap.id)) return false;
+    const base = gaps.filter((gap) => {
       const inTopic =
         selectedTopicId === "all" || gap.topics.some((t) => t.id === selectedTopicId);
       if (!inTopic) return false;
@@ -302,7 +314,20 @@ export function GapAnalysis() {
         gap.topics.map((t) => t.label.toLowerCase()).join(" ");
       return haystack.includes(q);
     });
-  }, [gaps, searchQuery, selectedTopicId, addressedIds]);
+
+    // Order by addressed vs non-addressed, then keep existing severity/recency ordering.
+    const ordered = [...base].sort((a, b) => {
+      const aAddressed = addressedIds.has(a.id);
+      const bAddressed = addressedIds.has(b.id);
+      if (aAddressed === bAddressed) return 0;
+      if (addressedOrder === "addressed-first") {
+        return aAddressed ? -1 : 1;
+      }
+      // unaddressed-first
+      return aAddressed ? 1 : -1;
+    });
+    return ordered;
+  }, [gaps, searchQuery, selectedTopicId, addressedIds, addressedOrder]);
 
   const chartData = useMemo(() => {
     const counts = new Map<string, { label: string; count: number }>();
@@ -322,26 +347,17 @@ export function GapAnalysis() {
       .slice(0, 8);
   }, [gaps]);
 
-  const handleGenerateQuestions = async (gap: AggregatedGap) => {
-    try {
-      const topics = gap.topics.length
-        ? gap.topics
-        : [{ id: "gap", label: gap.description.slice(0, 60) }];
-      const res = await fetch("/api/questions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topics, count: 8 }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json.error ?? "Failed to generate questions");
-      }
-      toast.success("Practice questions generated. Open the Synthesize tab to use them.");
-    } catch (e) {
-      toast.error(
-        e instanceof Error ? e.message : "Failed to generate practice questions",
-      );
-    }
+  const handleGenerateQuestions = (gap: AggregatedGap) => {
+    const topics = gap.topics.length
+      ? gap.topics
+      : [{ id: "gap", label: gap.description.slice(0, 60) }];
+    navigate("/dashboard/synthesize", {
+      state: {
+        fromGaps: true,
+        gapDescription: gap.description,
+        topicsFromGaps: topics,
+      },
+    });
   };
 
   const handleStartTeachBack = (gap: AggregatedGap) => {
@@ -509,9 +525,23 @@ export function GapAnalysis() {
                 {filteredGaps.length} active gap
                 {filteredGaps.length === 1 ? "" : "s"} surfaced from your syntheses
               </p>
-              <p className="text-xs text-muted-foreground">
-                Sorted by severity and recency.
-              </p>
+              <div className="flex items-center gap-3">
+                <select
+                  className="h-8 rounded-full border border-input bg-background px-3 text-[11px] font-medium text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  value={addressedOrder}
+                  onChange={(e) =>
+                    setAddressedOrder(
+                      e.target.value === "addressed-first" ? "addressed-first" : "unaddressed-first",
+                    )
+                  }
+                >
+                  <option value="unaddressed-first">Open gaps first</option>
+                  <option value="addressed-first">Addressed first</option>
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  Sorted by severity and recency.
+                </p>
+              </div>
             </div>
 
             {filteredGaps.length === 0 ? (
@@ -524,108 +554,123 @@ export function GapAnalysis() {
                 type="multiple"
                 className="divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-card dark:divide-slate-800 dark:border-slate-800"
               >
-                {filteredGaps.map((gap) => (
-                  <AccordionItem key={gap.id} value={gap.id}>
-                    <AccordionTrigger className="px-4">
-                      <div className="flex flex-1 flex-col gap-1 text-left">
-                        <div className="flex items-center gap-2">
-                          <span className="inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded-full bg-amber-100 px-2 text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:bg-amber-900/40 dark:text-amber-200">
-                            {gap.severityScore >= 3
-                              ? "High"
-                              : gap.severityScore === 2
-                              ? "Medium"
-                              : "Low"}
-                          </span>
-                          <span className="text-sm font-semibold text-foreground">
-                            {gap.description}
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                          {gap.topics.slice(0, 4).map((t) => (
-                            <Badge
-                              key={t.id}
-                              variant="outline"
-                              className="border-amber-200 bg-amber-50/70 text-[11px] font-medium text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-100"
-                            >
-                              {t.label}
-                            </Badge>
-                          ))}
-                          {gap.topics.length > 4 && (
-                            <span className="text-[11px] text-muted-foreground">
-                              +{gap.topics.length - 4} more
+                {filteredGaps.map((gap) => {
+                  const isAddressed = addressedIds.has(gap.id);
+                  return (
+                    <AccordionItem key={gap.id} value={gap.id}>
+                      <AccordionTrigger className="px-4">
+                        <div className="flex flex-1 flex-col gap-1 text-left">
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded-full bg-amber-100 px-2 text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:bg-amber-900/40 dark:text-amber-200">
+                              {gap.severityScore >= 3
+                                ? "High"
+                                : gap.severityScore === 2
+                                ? "Medium"
+                                : "Low"}
                             </span>
-                          )}
-                          <span className="ml-auto inline-flex items-center gap-1 text-[11px]">
-                            <Clock className="h-3 w-3" />
-                            {gap.lastSeenAt
-                              ? new Date(gap.lastSeenAt).toLocaleDateString()
-                              : "Unknown"}
-                          </span>
-                        </div>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-4 pb-4">
-                      <div className="space-y-3 text-sm">
-                        <div className="flex items-start gap-2">
-                          <AlertCircle className="mt-0.5 h-4 w-4 text-amber-500" />
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                              Where this shows up
-                            </p>
-                            <ul className="mt-1 space-y-1 text-sm text-muted-foreground">
-                              {gap.instances.slice(0, 4).map((inst) => (
-                                <li key={inst.id} className="flex items-center justify-between gap-2">
-                                  <span className="truncate">
-                                    {inst.synthesisTitle}
-                                  </span>
-                                  {inst.createdAt && (
-                                    <span className="shrink-0 text-[11px] text-slate-400">
-                                      {new Date(inst.createdAt).toLocaleDateString()}
-                                    </span>
-                                  )}
-                                </li>
-                              ))}
-                              {gap.instances.length > 4 && (
-                                <li className="text-[11px] text-muted-foreground">
-                                  +{gap.instances.length - 4} more syntheses
-                                </li>
-                              )}
-                            </ul>
+                            <span
+                              className={`text-sm font-semibold ${
+                                isAddressed
+                                  ? "text-muted-foreground line-through"
+                                  : "text-foreground"
+                              }`}
+                            >
+                              {gap.description}
+                            </span>
+                          </div>
+                          <div
+                            className={`flex flex-wrap items-center gap-2 text-xs ${
+                              isAddressed ? "text-muted-foreground/70" : "text-muted-foreground"
+                            }`}
+                          >
+                            {gap.topics.slice(0, 4).map((t) => (
+                              <Badge
+                                key={t.id}
+                                variant="outline"
+                                className="border-amber-200 bg-amber-50/70 text-[11px] font-medium text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-100"
+                              >
+                                {t.label}
+                              </Badge>
+                            ))}
+                            {gap.topics.length > 4 && (
+                              <span className="text-[11px] text-muted-foreground">
+                                +{gap.topics.length - 4} more
+                              </span>
+                            )}
+                            <span className="ml-auto inline-flex items-center gap-1 text-[11px]">
+                              <Clock className="h-3 w-3" />
+                              {gap.lastSeenAt
+                                ? new Date(gap.lastSeenAt).toLocaleDateString()
+                                : "Unknown"}
+                            </span>
                           </div>
                         </div>
+                      </AccordionTrigger>
+                      <AccordionContent className="px-4 pb-4">
+                        <div className="space-y-3 text-sm">
+                          <div className="flex items-start gap-2">
+                            <AlertCircle className="mt-0.5 h-4 w-4 text-amber-500" />
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                Where this shows up
+                              </p>
+                              <ul className="mt-1 space-y-1 text-sm text-muted-foreground">
+                                {gap.instances.slice(0, 4).map((inst) => (
+                                  <li
+                                    key={inst.id}
+                                    className="flex items-center justify-between gap-2"
+                                  >
+                                    <span className="truncate">{inst.synthesisTitle}</span>
+                                    {inst.createdAt && (
+                                      <span className="shrink-0 text-[11px] text-slate-400">
+                                        {new Date(inst.createdAt).toLocaleDateString()}
+                                      </span>
+                                    )}
+                                  </li>
+                                ))}
+                                {gap.instances.length > 4 && (
+                                  <li className="text-[11px] text-muted-foreground">
+                                    +{gap.instances.length - 4} more syntheses
+                                  </li>
+                                )}
+                              </ul>
+                            </div>
+                          </div>
 
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Button
-                            size="sm"
-                            onClick={() => void handleGenerateQuestions(gap)}
-                            className="inline-flex items-center gap-1"
-                          >
-                            <Sparkles className="h-4 w-4" />
-                            Generate practice questions
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleStartTeachBack(gap)}
-                            className="inline-flex items-center gap-1"
-                          >
-                            <Brain className="h-4 w-4" />
-                            Start teach‑back coach
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleMarkAddressed(gap.id)}
-                            className="inline-flex items-center gap-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
-                          >
-                            <CheckCircle2 className="h-4 w-4" />
-                            Mark as addressed
-                          </Button>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => handleGenerateQuestions(gap)}
+                              className="inline-flex items-center gap-1"
+                            >
+                              <Sparkles className="h-4 w-4" />
+                              Generate practice questions
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleStartTeachBack(gap)}
+                              className="inline-flex items-center gap-1"
+                            >
+                              <Brain className="h-4 w-4" />
+                              Start teach‑back coach
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleMarkAddressed(gap.id)}
+                              disabled={isAddressed}
+                              className="inline-flex items-center gap-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 disabled:opacity-60 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
+                            >
+                              <CheckCircle2 className="h-4 w-4" />
+                              {isAddressed ? "Addressed" : "Mark as addressed"}
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
+                      </AccordionContent>
+                    </AccordionItem>
+                  );
+                })}
               </Accordion>
             )}
           </div>
