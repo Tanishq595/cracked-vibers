@@ -39,6 +39,8 @@ import canvasCallbackHandler from './api/canvas-callback'
 import googleClassroomAuthHandler from './api/google-classroom-auth'
 import googleClassroomAuthCallbackHandler from './api/google-classroom-auth-callback'
 import googleClassroomDataHandler from './api/google-classroom-data'
+import speakingAssessmentsListHandler from './api/speaking-assessments-list'
+import speakingAssessmentDetailHandler from './api/speaking-assessment-detail'
 
 function readBody(nodeReq: Connect.IncomingMessage): Promise<Record<string, unknown> | null> {
   return new Promise((resolve, reject) => {
@@ -103,6 +105,8 @@ const API_HANDLERS: Record<string, (req: Connect.IncomingMessage, res: Connect.S
   '/api/google-classroom-auth': runVercelHandlerGetWithRedirect(googleClassroomAuthHandler),
   '/api/google-classroom-auth/callback': runVercelHandlerGetWithRedirect(googleClassroomAuthCallbackHandler),
   '/api/google-classroom-data': runVercelHandlerGet(googleClassroomDataHandler),
+  '/api/speaking-assessments-list': runVercelHandlerGet(speakingAssessmentsListHandler),
+  '/api/speaking-assessment-detail': runVercelHandlerGet(speakingAssessmentDetailHandler),
 }
 
 type VercelReq = {
@@ -325,6 +329,14 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
+  },
+
+  optimizeDeps: {
+    include: [
+      '@react-pdf-viewer/core',
+      '@react-pdf-viewer/default-layout',
+      '@react-pdf-viewer/highlight',
+    ],
   },
 
   server: {

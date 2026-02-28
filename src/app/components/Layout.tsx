@@ -3,13 +3,14 @@ import { useState } from 'react';
 import { useClerk, useUser } from '@clerk/clerk-react';
 const LOGO_SVG = '/company_logo/logo.png';
 const LOGO_PNG = '/company_logo/logo.png';
-import { 
-  LayoutDashboard, 
-  Search, 
-  Network, 
-  TrendingDown, 
-  Calendar, 
-  Link2, 
+import {
+  LayoutDashboard,
+  Search,
+  Network,
+  TrendingDown,
+  TrendingUp,
+  Calendar,
+  Link2,
   Sparkles,
   Flame,
   Menu,
@@ -19,6 +20,7 @@ import {
   Mic,
   Youtube,
   GraduationCap,
+  Trophy,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -27,6 +29,7 @@ const navItems = [
   { path: '/dashboard/synthesize', label: 'Synthesize', icon: Sparkles },
   { path: '/dashboard/library', label: 'Library', icon: FolderOpen },
   { path: '/dashboard/coach', label: 'Speaking coach', icon: Mic },
+  { path: '/dashboard/speaking-assessments', label: 'Assessments', icon: Trophy },
   { path: '/dashboard/search', label: 'Search', icon: Search },
   { path: '/dashboard/knowledge-graph', label: 'Graph', icon: Network },
   { path: '/dashboard/gaps', label: 'Gaps', icon: TrendingDown },
