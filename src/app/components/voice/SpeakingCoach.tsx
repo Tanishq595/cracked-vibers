@@ -44,7 +44,7 @@ export function SpeakingCoach({
   const recognitionRef = useRef<{ start(): void; stop(): void } | null>(null);
   const userTranscriptRef = useRef("");
   const conversationTurnsRef = useRef<{ role: "user" | "coach"; text: string }[]>([]);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     userTranscriptRef.current = userTranscript;
@@ -88,6 +88,7 @@ export function SpeakingCoach({
   }, [coachContext?.topics, coachContext?.knowledgeGaps, coachContext?.studyPlan, coachMode]);
 
   // Play coach message with ElevenLabs TTS when API is configured
+  // and sync the bot video with the spoken audio.
   const playCoachMessage = useCallback(async (text: string) => {
     if (!text.trim()) return;
     try {
@@ -107,9 +108,27 @@ export function SpeakingCoach({
       const contentType = data.contentType || "audio/mpeg";
       const audio = new Audio(`data:${contentType};base64,${data.audioBase64}`);
       ttsAudioRef.current = audio;
-      audio.play().catch(() => {});
+
+      // Start bot video when the coach starts speaking
+      const video = videoRef.current;
+      if (video) {
+        try {
+          video.currentTime = 0;
+          // Ignore autoplay failures (browser policy)
+          void video.play();
+        } catch {
+          // ignore
+        }
+      }
+
+      void audio.play();
       audio.onended = () => {
         if (ttsAudioRef.current === audio) ttsAudioRef.current = null;
+        const v = videoRef.current;
+        if (v) {
+          v.pause();
+          v.currentTime = 0;
+        }
       };
     } catch {
       // TTS optional; ignore errors
@@ -188,6 +207,12 @@ export function SpeakingCoach({
       setIsStopping(false);
       setConversationActive(false);
       setMicOn(true);
+
+      // Stop and reset bot video when conversation disconnects
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.currentTime = 0;
+      }
     },
     onError: () => {
       setError("An error occurred during the conversation");
@@ -279,6 +304,13 @@ export function SpeakingCoach({
     try {
       await conversation.endSession();
       setConversationActive(false);
+
+      // Stop and reset bot video when ending practice
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.currentTime = 0;
+      }
+
       if (topicLabels.length > 0) {
         if (userId) {
           try {
@@ -308,6 +340,12 @@ export function SpeakingCoach({
     setIsStarting(false);
     setIsStopping(false);
     setError(null);
+
+    // Stop and reset bot video on force stop
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
+    }
   }, []);
 
   const toggleMic = useCallback(() => {
@@ -337,86 +375,6 @@ export function SpeakingCoach({
     return "Ready to start practice";
   };
 
-  // Canvas-based orange voice wavering UI
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    let frameId: number;
-
-    const render = (time: number) => {
-      const { width, height } = canvas;
-
-      ctx.clearRect(0, 0, width, height);
-
-      const cx = width / 2;
-      const cy = height / 2;
-      // Base radius for layout
-      const radius = Math.min(width, height) * 0.22;
-      // Circle breathing: smoothly smaller and bigger over time
-      const circleScale = 0.92 + 0.12 * Math.sin(time / 520);
-      const circleRadius = radius * circleScale;
-
-      // Core orange circle
-      const gradient = ctx.createRadialGradient(
-        cx,
-        cy,
-        circleRadius * 0.3,
-        cx,
-        cy,
-        circleRadius * 1.2,
-      );
-      gradient.addColorStop(0, "#ffe2b3");
-      gradient.addColorStop(0.5, "#ffb347");
-      gradient.addColorStop(1, "rgba(255,140,66,0.1)");
-      ctx.fillStyle = gradient;
-      ctx.beginPath();
-      ctx.arc(cx, cy, circleRadius, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Rays – single unified wavering effect (more space around circle, room to extend)
-      const rayCount = 24;
-      const baseInner = radius * 1.25; // start a bit further from the circle
-      const baseOuter = radius * 1.9; // more room for extension
-      const amp = 1.0;
-
-      for (let i = 0; i < rayCount; i++) {
-        const angle = (Math.PI * 2 * i) / rayCount;
-        const phase = time / 260 + i * 0.5;
-        const extra = (Math.sin(phase) * 0.5 + 0.5) * (radius * 0.45) * amp;
-
-        const inner = baseInner;
-        const outer = baseOuter + extra;
-
-        const x1 = cx + inner * Math.cos(angle);
-        const y1 = cy + inner * Math.sin(angle);
-        const x2 = cx + outer * Math.cos(angle);
-        const y2 = cy + outer * Math.sin(angle);
-
-        ctx.strokeStyle = "rgba(255,179,71,0.95)";
-        ctx.lineWidth = radius * 0.16;
-        ctx.lineCap = "round";
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.stroke();
-      }
-
-      frameId = window.requestAnimationFrame(render);
-    };
-
-    frameId = window.requestAnimationFrame(render);
-
-    return () => {
-      if (frameId) {
-        window.cancelAnimationFrame(frameId);
-      }
-    };
-  }, [conversationActive, conversation.isSpeaking, isStopping]);
-
   return (
     <div className="flex items-center justify-center gap-x-4 px-3 sm:px-0">
       <Card className="w-full max-w-2xl rounded-3xl border border-border/70 bg-card/95 shadow-lg shadow-slate-900/10">
@@ -427,12 +385,14 @@ export function SpeakingCoach({
         </CardHeader>
         <CardContent className="pb-6 pt-0">
           <div className="flex flex-col gap-y-4 text-center">
-            <div className="mx-auto mt-4 mb-4 flex h-32 w-32 items-center justify-center sm:mt-8 sm:mb-6 sm:h-40 sm:w-40">
-              <canvas
-                ref={canvasRef}
-                width={200}
-                height={200}
-                className="h-full w-full"
+            <div className="mx-auto mt-4 mb-4 flex h-40 w-36 items-center justify-center sm:mt-8 sm:mb-6 sm:h-52 sm:w-44">
+              <video
+                ref={videoRef}
+                src="/bot/Bear_talking.mp4"
+                loop
+                muted
+                playsInline
+                className="h-full w-full rounded-lg object-cover"
               />
             </div>
 
