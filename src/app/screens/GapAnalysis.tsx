@@ -283,6 +283,7 @@ const chartConfig = {
 
 export function GapAnalysis() {
   const navigate = useNavigate();
+  const { user } = useUser();
   const { gaps, loading, error } = useUserGaps();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTopicId, setSelectedTopicId] = useState<string>("all");
@@ -290,6 +291,27 @@ export function GapAnalysis() {
   const [addressedOrder, setAddressedOrder] = useState<"unaddressed-first" | "addressed-first">(
     "unaddressed-first",
   );
+
+  // Load persisted addressed IDs from Supabase
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    fetch("/api/gaps-addressed", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: user.id }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled) return;
+        const list = Array.isArray(data?.addressedIds) ? data.addressedIds : [];
+        setAddressedIds(new Set(list));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   const allTopics = useMemo(() => {
     const map = new Map<string, string>();
@@ -376,7 +398,15 @@ export function GapAnalysis() {
   };
 
   const handleMarkAddressed = (gapId: string) => {
-    setAddressedIds((prev) => new Set([...Array.from(prev), gapId]));
+    const next = new Set([...Array.from(addressedIds), gapId]);
+    setAddressedIds(next);
+    if (user?.id) {
+      fetch("/api/gaps-addressed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, addressedIds: Array.from(next) }),
+      }).catch(() => {});
+    }
   };
 
   return (
