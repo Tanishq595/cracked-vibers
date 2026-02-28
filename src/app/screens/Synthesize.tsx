@@ -18,6 +18,7 @@ import { KnowledgeGraph } from "../components/KnowledgeGraph";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -269,6 +270,8 @@ export function Synthesize() {
   const [libraryAdding, setLibraryAdding] = useState(false);
   const [libraryFolders, setLibraryFolders] = useState<LibraryFolder[]>([]);
   const [libraryFileToFolder, setLibraryFileToFolder] = useState<Record<string, string>>({});
+  const [libraryDialogOpen, setLibraryDialogOpen] = useState(false);
+  const [pendingLibrarySelectedKeys, setPendingLibrarySelectedKeys] = useState<string[]>([]);
 
   const [currentSet, setCurrentSet] = useState<QuestionSet | null>(null);
   const [savedSets, setSavedSets] = useState<QuestionSet[]>([]);
@@ -632,6 +635,17 @@ export function Synthesize() {
     );
   }
 
+  function togglePendingLibrarySelected(key: string) {
+    setPendingLibrarySelectedKeys((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+  }
+
+  function applyLibrarySelectionAndClose() {
+    setLibrarySelectedKeys(pendingLibrarySelectedKeys);
+    setLibraryDialogOpen(false);
+  }
+
   const libraryItemsByFolder = useMemo(() => {
     const uncategorized: LibraryItem[] = [];
     const byFolder: Record<string, LibraryItem[]> = {};
@@ -677,21 +691,31 @@ export function Synthesize() {
                 Select one or more files from your library. We’ll combine their content to generate questions and flashcards.
               </CardDescription>
             </div>
-            <Dialog>
-              <DialogTrigger asChild>
-                <button
-                  type="button"
-                  onClick={() => void loadLibrary()}
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm hover:border-[#ffb347] hover:bg-[#ffb347]/5 dark:border-slate-700 dark:bg-slate-900"
-                >
-                  <FileText className="w-4 h-4" />
-                  Choose from Library
-                </button>
-              </DialogTrigger>
-              <DialogContent className="max-w-3xl">
-                <DialogHeader>
-                  <DialogTitle>Select materials</DialogTitle>
-                </DialogHeader>
+            <Dialog
+                open={libraryDialogOpen}
+                onOpenChange={(open) => {
+                  setLibraryDialogOpen(open);
+                  if (open) setPendingLibrarySelectedKeys([...librarySelectedKeys]);
+                }}
+              >
+                <DialogTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void loadLibrary();
+                      setPendingLibrarySelectedKeys([...librarySelectedKeys]);
+                      setLibraryDialogOpen(true);
+                    }}
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm hover:border-[#ffb347] hover:bg-[#ffb347]/5 dark:border-slate-700 dark:bg-slate-900"
+                  >
+                    <FileText className="w-4 h-4" />
+                    Choose from Library
+                  </button>
+                </DialogTrigger>
+                <DialogContent className="max-w-3xl">
+                  <DialogHeader>
+                    <DialogTitle>Select materials</DialogTitle>
+                  </DialogHeader>
                 <div className="mt-2 space-y-3">
                   {libraryError && (
                     <p className="text-xs text-red-600">{libraryError}</p>
@@ -730,8 +754,8 @@ export function Synthesize() {
                                 >
                                   <input
                                     type="checkbox"
-                                    checked={librarySelectedKeys.includes(item.key)}
-                                    onChange={() => toggleLibrarySelected(item.key)}
+                                    checked={pendingLibrarySelectedKeys.includes(item.key)}
+                                    onChange={() => togglePendingLibrarySelected(item.key)}
                                     className="h-4 w-4 rounded border-slate-300 text-[#ffb347] focus:ring-[#ffb347]"
                                   />
                                   <FileText className="w-4 h-4 text-slate-500 shrink-0" />
@@ -769,8 +793,8 @@ export function Synthesize() {
                                   >
                                     <input
                                       type="checkbox"
-                                      checked={librarySelectedKeys.includes(item.key)}
-                                      onChange={() => toggleLibrarySelected(item.key)}
+                                      checked={pendingLibrarySelectedKeys.includes(item.key)}
+                                      onChange={() => togglePendingLibrarySelected(item.key)}
                                       className="h-4 w-4 rounded border-slate-300 text-[#ffb347] focus:ring-[#ffb347]"
                                     />
                                     <FileText className="w-4 h-4 text-slate-500 shrink-0" />
@@ -788,11 +812,48 @@ export function Synthesize() {
                     </div>
                   )}
                 </div>
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setLibraryDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="button" onClick={applyLibrarySelectionAndClose}>
+                    Done
+                  </Button>
+                </DialogFooter>
               </DialogContent>
             </Dialog>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          {librarySelectedKeys.length > 0 && (
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Attached files</Label>
+              <div className="flex flex-wrap gap-2">
+                {librarySelectedKeys.map((key) => {
+                  const item = libraryItems.find((it) => it.key === key);
+                  const name = item ? item.key.split("/").pop() || item.key : key.split("/").pop() || key;
+                  return (
+                    <span
+                      key={key}
+                      className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-800 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-200"
+                    >
+                      <FileText className="w-4 h-4 shrink-0 text-slate-500" />
+                      <span className="truncate max-w-[200px]">{name}</span>
+                      <button
+                        type="button"
+                        onClick={() => setLibrarySelectedKeys((prev) => prev.filter((k) => k !== key))}
+                        className="shrink-0 rounded p-0.5 text-slate-500 hover:bg-slate-200 hover:text-slate-800 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                        title="Remove"
+                        aria-label="Remove file"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="set-name" className="text-xs text-muted-foreground">
               Optional: name this set
