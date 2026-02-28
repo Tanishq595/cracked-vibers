@@ -27,15 +27,16 @@ export default async function handler(
     return;
   }
 
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  // Use separate OAuth client for Classroom so YouTube and Classroom tokens don't invalidate each other
+  const clientId = process.env.GOOGLE_CLASSROOM_CLIENT_ID || process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLASSROOM_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET;
   const baseUrl = process.env.VITE_API_URL || 'http://localhost:3000';
   const redirectUri = `${baseUrl.replace(/\/$/, '')}/api/google-classroom-auth/callback`;
-  // Add this exact redirectUri to Google Cloud Console → APIs & Services → Credentials → your OAuth client → Authorized redirect URIs (e.g. http://localhost:3000/api/google-classroom-auth/callback)
+  // Add this exact redirectUri to Google Cloud Console → Credentials → your Classroom OAuth client → Authorized redirect URIs
 
   if (!clientId || !clientSecret) {
     res.status(500).json({
-      error: 'Google Classroom OAuth not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env',
+      error: 'Google Classroom OAuth not configured. Set GOOGLE_CLASSROOM_CLIENT_ID and GOOGLE_CLASSROOM_CLIENT_SECRET (or GOOGLE_CLIENT_ID/SECRET) in .env',
     });
     return;
   }

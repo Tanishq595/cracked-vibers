@@ -61,8 +61,9 @@ export default async function handler(
     return;
   }
 
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  // Must match the client used in google-classroom-auth (separate from YouTube to avoid token invalidation)
+  const clientId = process.env.GOOGLE_CLASSROOM_CLIENT_ID || process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLASSROOM_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET;
   const redirectUri = `${baseUrl.replace(/\/$/, '')}/api/google-classroom-auth/callback`;
 
   if (!clientId || !clientSecret) {

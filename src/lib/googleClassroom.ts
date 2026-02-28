@@ -1,9 +1,10 @@
 import { OAuth2Client } from 'google-auth-library';
 import { google } from 'googleapis';
 
+// Use Classroom-specific client so tokens don't conflict with YouTube (same env as auth/callback)
 const oauth2Client = new OAuth2Client({
-  clientId: process.env.GOOGLE_CLIENT_ID,
-  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  clientId: process.env.GOOGLE_CLASSROOM_CLIENT_ID || process.env.GOOGLE_CLIENT_ID,
+  clientSecret: process.env.GOOGLE_CLASSROOM_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET,
 });
 
 export async function getCourses(accessToken: string) {
