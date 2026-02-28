@@ -1,8 +1,8 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router';
 import { useState } from 'react';
 import { useClerk, useUser } from '@clerk/clerk-react';
-const LOGO_SVG = '/logo/logo.svg';
-const LOGO_PNG = '/logo/logo.png';
+const LOGO_SVG = '/company_logo/logo.svg';
+const LOGO_PNG = '/company_logo/logo.png';
 import { 
   LayoutDashboard, 
   Search, 
@@ -16,7 +16,8 @@ import {
   X,
   LogOut,
   Upload,
-  FolderOpen
+  FolderOpen,
+  Mic
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -25,6 +26,7 @@ const navItems = [
   { path: '/dashboard/synthesize', label: 'Synthesize', icon: Sparkles },
   { path: '/dashboard/library', label: 'Library', icon: FolderOpen },
   { path: '/dashboard/upload', label: 'Upload', icon: Upload },
+  { path: '/dashboard/coach', label: 'Speaking coach', icon: Mic },
   { path: '/dashboard/search', label: 'Search', icon: Search },
   { path: '/dashboard/knowledge-graph', label: 'Graph', icon: Network },
   { path: '/dashboard/gaps', label: 'Gaps', icon: TrendingDown },

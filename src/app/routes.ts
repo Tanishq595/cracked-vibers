@@ -8,6 +8,7 @@ import { Dashboard } from "./screens/Dashboard";
 import { Synthesize } from "./screens/Synthesize";
 import { Upload } from "./screens/Upload";
 import { Library } from "./screens/Library";
+import { SpeakingCoachScreen } from "./screens/SpeakingCoach";
 import { Search } from "./screens/Search";
 import { KnowledgeGraph } from "./screens/KnowledgeGraph";
 import { GapAnalysis } from "./screens/GapAnalysis";
@@ -50,6 +51,7 @@ export const router = createBrowserRouter([
               { path: "synthesize", Component: Synthesize },
               { path: "upload", Component: Upload },
               { path: "library", Component: Library },
+              { path: "coach", Component: SpeakingCoachScreen },
               { path: "search", Component: Search },
               { path: "knowledge-graph", Component: KnowledgeGraph },
               { path: "gaps", Component: GapAnalysis },
