@@ -10,6 +10,7 @@ import {
   TrendingUp,
   ExternalLink
 } from 'lucide-react';
+import { AIChatAssistant } from '../components/AIChatAssistant';
 
 interface Node {
   id: number;
@@ -156,7 +157,9 @@ export function KnowledgeGraph() {
   };
 
   return (
-    <div className="max-w-[1400px] mx-auto space-y-6">
+    <>
+      <AIChatAssistant />
+      <div className="max-w-[1400px] mx-auto space-y-6">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -433,6 +436,7 @@ export function KnowledgeGraph() {
           );
         })}
       </div>
-    </div>
+      </div>
+    </>
   );
 }

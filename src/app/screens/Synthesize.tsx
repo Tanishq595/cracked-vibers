@@ -14,6 +14,7 @@ import { Textarea } from "../components/ui/textarea";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { cn } from "../components/ui/utils";
+import { AIChatAssistant } from "../components/AIChatAssistant";
 import { KnowledgeGraph } from "../components/KnowledgeGraph";
 import {
   Dialog,
@@ -672,7 +673,9 @@ export function Synthesize() {
   const currentFlashcard = flashcardList[flashcardIndex];
 
   return (
-    <div className="mx-auto max-w-4xl space-y-8 py-8">
+    <>
+      <AIChatAssistant />
+      <div className="mx-auto max-w-4xl space-y-8 py-8">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
           M.U.S.T.Learn
@@ -1381,6 +1384,7 @@ export function Synthesize() {
           )}
         </>
       )}
-    </div>
+      </div>
+    </>
   );
 }

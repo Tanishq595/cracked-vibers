@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   AlertCircle
 } from 'lucide-react';
+import { AIChatAssistant } from '../components/AIChatAssistant';
 
 interface StudyBlock {
   id: number;
@@ -79,7 +80,9 @@ export function Planner() {
   const [draggedBlock, setDraggedBlock] = useState<number | null>(null);
 
   return (
-    <div className="max-w-[1400px] mx-auto space-y-6">
+    <>
+      <AIChatAssistant />
+      <div className="max-w-[1400px] mx-auto space-y-6">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -342,6 +345,7 @@ export function Planner() {
           </motion.div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

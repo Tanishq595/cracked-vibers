@@ -10,6 +10,7 @@ import {
   ArrowRight,
   TrendingDown
 } from 'lucide-react';
+import { AIChatAssistant } from '../components/AIChatAssistant';
 
 interface GapData {
   topic: string;
@@ -81,7 +82,9 @@ const getCoverageIntensity = (value: number) => {
 
 export function GapAnalysis() {
   return (
-    <div className="max-w-[1400px] mx-auto space-y-6">
+    <>
+      <AIChatAssistant />
+      <div className="max-w-[1400px] mx-auto space-y-6">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -362,6 +365,7 @@ export function GapAnalysis() {
           <div className="text-sm text-slate-700 font-semibold">Topics Mastered</div>
         </motion.div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
