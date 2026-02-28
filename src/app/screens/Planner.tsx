@@ -49,11 +49,11 @@ const aiSuggestions = [
 const getTypeColor = (type: string) => {
   switch (type) {
     case 'ai-suggested':
-      return 'bg-gradient-to-r from-indigo-500 to-cyan-500 border-indigo-400';
+      return 'bg-gradient-to-r from-[#ffb347] to-[#ff8c42] border-[#ffb347]';
     case 'assignment':
       return 'bg-red-500 border-red-400';
     case 'study':
-      return 'bg-indigo-500 border-indigo-400';
+      return 'bg-[#ffb347] border-[#ff8c42]';
     case 'review':
       return 'bg-cyan-500 border-cyan-400';
     default:
@@ -68,7 +68,7 @@ const getPriorityBadge = (priority: string) => {
     case 'medium':
       return 'bg-amber-100 text-amber-700 border-amber-300';
     case 'low':
-      return 'bg-indigo-100 text-indigo-700 border-indigo-300';
+      return 'bg-[#ffb347]/20 text-[#ff8c42] border-[#ffb347]/40';
     default:
       return 'bg-slate-100 text-slate-700 border-slate-300';
   }
@@ -96,7 +96,7 @@ export function Planner() {
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-700 hover:to-cyan-700 rounded-xl font-semibold text-white transition-all shadow-lg shadow-indigo-500/30"
+            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#ffb347] to-[#ff8c42] hover:from-[#ff8c42] hover:to-[#ff6b35] rounded-xl font-semibold text-white transition-all shadow-lg shadow-[#ffb347]/30"
           >
             <Plus className="w-5 h-5" />
             Add Study Block
@@ -118,7 +118,7 @@ export function Planner() {
           <ChevronLeft className="w-5 h-5 text-slate-600" />
         </button>
         <div className="flex items-center gap-3">
-          <CalendarIcon className="w-5 h-5 text-indigo-600" />
+          <CalendarIcon className="w-5 h-5 text-[#ffb347]" />
           <span className="text-lg font-semibold text-slate-900">
             Week of Feb 24 - Mar 2, 2026
           </span>
@@ -171,7 +171,7 @@ export function Planner() {
                     return (
                       <div
                         key={`${day}-${hour}`}
-                        className="min-h-[60px] bg-slate-50 rounded-lg border border-slate-200 hover:border-indigo-300 transition-colors relative"
+                        className="min-h-[60px] bg-slate-50 rounded-lg border border-slate-200 hover:border-[#ffb347]/50 transition-colors relative"
                       >
                         {blocksForSlot.map((block) => (
                           <motion.div
@@ -216,7 +216,7 @@ export function Planner() {
           {/* Legend */}
           <div className="flex items-center gap-6 mt-6 pt-6 border-t-2 border-slate-200">
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded bg-indigo-500 border-2 border-indigo-400 shadow-sm" />
+              <div className="w-4 h-4 rounded bg-[#ffb347] border-2 border-[#ff8c42] shadow-sm" />
               <span className="text-xs text-slate-600 font-semibold">Study</span>
             </div>
             <div className="flex items-center gap-2">
@@ -228,7 +228,7 @@ export function Planner() {
               <span className="text-xs text-slate-600 font-semibold">Assignment</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded bg-gradient-to-r from-indigo-500 to-cyan-500 border-2 border-indigo-400 shadow-sm" />
+              <div className="w-4 h-4 rounded bg-gradient-to-r from-[#ffb347] to-[#ff8c42] border-2 border-[#ffb347] shadow-sm" />
               <span className="text-xs text-slate-600 font-semibold">AI-Suggested</span>
             </div>
           </div>
@@ -244,7 +244,7 @@ export function Planner() {
             className="rounded-2xl bg-white border-2 border-slate-200 p-6 shadow-sm"
           >
             <div className="flex items-center gap-2 mb-4">
-              <Sparkles className="w-5 h-5 text-indigo-600" />
+              <Sparkles className="w-5 h-5 text-[#ffb347]" />
               <h3 className="font-bold text-slate-900">AI Suggestions</h3>
             </div>
 
@@ -253,11 +253,11 @@ export function Planner() {
                 <motion.div
                   key={index}
                   whileHover={{ x: 4 }}
-                  className="p-3 bg-gradient-to-r from-indigo-50 to-cyan-50 border-2 border-indigo-200 rounded-xl cursor-pointer hover:border-indigo-300 hover:shadow-md transition-all group"
+                  className="p-3 bg-gradient-to-r from-[#ffb347]/10 to-[#ff8c42]/10 border-2 border-[#ffb347]/30 rounded-xl cursor-pointer hover:border-[#ffb347] hover:shadow-md transition-all group"
                 >
                   <div className="flex items-start justify-between mb-2">
-                    <div className="text-xs text-indigo-700 font-bold">{suggestion.time}</div>
-                    <Plus className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 transition-colors" />
+                    <div className="text-xs text-[#ff8c42] font-bold">{suggestion.time}</div>
+                    <Plus className="w-4 h-4 text-slate-400 group-hover:text-[#ffb347] transition-colors" />
                   </div>
                   <div className="text-sm text-slate-900 font-semibold mb-2">{suggestion.task}</div>
                   <div className="text-xs text-slate-600 italic font-medium">{suggestion.reason}</div>
@@ -282,7 +282,7 @@ export function Planner() {
                   <span className="text-slate-900 font-bold">12.5h / 15h</span>
                 </div>
                 <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
-                  <div className="h-full bg-gradient-to-r from-indigo-500 to-cyan-500 rounded-full" style={{ width: '83%' }} />
+                  <div className="h-full bg-gradient-to-r from-[#ffb347] to-[#ff8c42] rounded-full" style={{ width: '83%' }} />
                 </div>
               </div>
 
@@ -322,7 +322,7 @@ export function Planner() {
               {studyBlocks.slice(0, 3).map((block) => (
                 <div
                   key={block.id}
-                  className="p-3 bg-slate-50 rounded-xl border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30 transition-all"
+                  className="p-3 bg-slate-50 rounded-xl border border-slate-200 hover:border-[#ffb347]/50 hover:bg-[#ffb347]/5 transition-all"
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div className="text-sm font-semibold text-slate-900">{block.title}</div>

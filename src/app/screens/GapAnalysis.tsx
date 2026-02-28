@@ -70,7 +70,7 @@ const getCoverageColor = (value: number) => {
   if (value === 0) return 'bg-slate-100 border-slate-300';
   if (value < 50) return 'bg-red-500/20 border-red-500/40';
   if (value < 70) return 'bg-amber-500/20 border-amber-500/40';
-  if (value < 85) return 'bg-indigo-500/20 border-indigo-500/40';
+  if (value < 85) return 'bg-[#ffb347]/20 border-[#ffb347]/40';
   return 'bg-cyan-500/20 border-cyan-500/40';
 };
 
@@ -94,8 +94,8 @@ export function GapAnalysis() {
             Identify and close knowledge gaps across all platforms
           </p>
         </div>
-        <div className="flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-red-50 to-orange-50 border-2 border-red-200 rounded-xl shadow-sm">
-          <TrendingDown className="w-5 h-5 text-red-600" />
+        <div className="flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-[#ffb347]/10 to-[#ff8c42]/10 border-2 border-[#ffb347]/40 rounded-xl shadow-sm">
+          <TrendingDown className="w-5 h-5 text-[#ff8c42]" />
           <div>
             <div className="text-2xl font-bold text-slate-900">4</div>
             <div className="text-xs text-slate-600 font-semibold">Active Gaps</div>
@@ -111,7 +111,7 @@ export function GapAnalysis() {
         className="space-y-3"
       >
         <div className="flex items-center gap-2 mb-4">
-          <Sparkles className="w-5 h-5 text-indigo-600" />
+          <Sparkles className="w-5 h-5 text-[#ffb347]" />
           <h2 className="text-xl font-bold text-slate-900">AI-Powered Insights</h2>
         </div>
 
@@ -128,7 +128,7 @@ export function GapAnalysis() {
                   ? 'border-red-300 hover:border-red-400 hover:bg-red-50/50'
                   : insight.priority === 'medium'
                   ? 'border-amber-300 hover:border-amber-400 hover:bg-amber-50/50'
-                  : 'border-indigo-300 hover:border-indigo-400 hover:bg-indigo-50/50'
+                  : 'border-[#ffb347]/50 hover:border-[#ffb347] hover:bg-[#ffb347]/5'
               }`}
             >
               <div className="flex items-start justify-between mb-3">
@@ -140,7 +140,7 @@ export function GapAnalysis() {
                         ? 'bg-red-100 text-red-700'
                         : insight.priority === 'medium'
                         ? 'bg-amber-100 text-amber-700'
-                        : 'bg-indigo-100 text-indigo-700'
+                        : 'bg-[#ffb347]/20 text-[#ff8c42]'
                     }`}>
                       {insight.priority}
                     </span>
@@ -149,7 +149,7 @@ export function GapAnalysis() {
                     <AlertCircle className="w-3 h-3 inline mr-1" />
                     {insight.issue}
                   </p>
-                  <div className="flex items-center gap-2 text-sm text-indigo-700 mb-2 font-semibold">
+                  <div className="flex items-center gap-2 text-sm text-[#ff8c42] mb-2 font-semibold">
                     <Sparkles className="w-4 h-4" />
                     <span>{insight.suggestion}</span>
                   </div>
@@ -162,7 +162,7 @@ export function GapAnalysis() {
                   <Clock className="w-3 h-3" />
                   <span>{insight.timeToClose} to close</span>
                 </div>
-                <button className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-sm font-semibold text-white transition-all group-hover:shadow-lg group-hover:shadow-indigo-500/30">
+                <button className="flex items-center gap-2 px-4 py-2 bg-[#ffb347] hover:bg-[#ff8c42] rounded-lg text-sm font-semibold text-white transition-all group-hover:shadow-lg group-hover:shadow-[#ffb347]/30">
                   Close Gap
                   <ArrowRight className="w-4 h-4" />
                 </button>
@@ -195,7 +195,7 @@ export function GapAnalysis() {
               <span>Medium (50-69%)</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded bg-indigo-500/20 border border-indigo-500/40" />
+              <div className="w-3 h-3 rounded bg-[#ffb347]/20 border border-[#ffb347]/40" />
               <span>Good (70-84%)</span>
             </div>
             <div className="flex items-center gap-2">
@@ -236,7 +236,7 @@ export function GapAnalysis() {
                 </th>
                 <th className="text-center py-4 px-4">
                   <div className="flex flex-col items-center gap-2">
-                    <CheckCircle2 className="w-5 h-5 text-indigo-600" />
+                    <CheckCircle2 className="w-5 h-5 text-[#ffb347]" />
                     <span className="text-xs text-slate-600 font-semibold">Overall</span>
                   </div>
                 </th>
@@ -338,9 +338,9 @@ export function GapAnalysis() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.55 }}
-          className="p-6 bg-gradient-to-br from-indigo-50 to-indigo-100/50 rounded-xl border-2 border-indigo-200 text-center shadow-sm"
+          className="p-6 bg-gradient-to-br from-[#ffb347]/10 to-[#ff8c42]/20 rounded-xl border-2 border-[#ffb347]/30 text-center shadow-sm"
         >
-          <div className="text-3xl font-bold text-indigo-700 mb-2">3</div>
+          <div className="text-3xl font-bold text-[#ff8c42] mb-2">3</div>
           <div className="text-sm text-slate-700 font-semibold">Gaps Closed This Week</div>
         </motion.div>
         <motion.div

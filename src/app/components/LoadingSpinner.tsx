@@ -13,7 +13,7 @@ export function LoadingSpinner() {
           repeat: Infinity,
           ease: "linear",
         }}
-        className="w-16 h-16 rounded-xl bg-gradient-to-br from-indigo-600 to-blue-600 flex items-center justify-center shadow-lg"
+        className="w-16 h-16 rounded-xl bg-gradient-to-br from-[#ffb347] to-[#ff8c42] flex items-center justify-center shadow-lg"
       >
         <Sparkles className="w-8 h-8 text-white" />
       </motion.div>
