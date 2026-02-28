@@ -18,6 +18,7 @@ import { motion, AnimatePresence } from 'motion/react';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { path: '/dashboard/synthesize', label: 'Synthesize', icon: Sparkles },
   { path: '/dashboard/search', label: 'Search', icon: Search },
   { path: '/dashboard/knowledge-graph', label: 'Knowledge Graph', icon: Network },
   { path: '/dashboard/gaps', label: 'Gap Analysis', icon: TrendingDown },

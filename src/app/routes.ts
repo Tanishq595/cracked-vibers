@@ -1,6 +1,7 @@
 import { createBrowserRouter, redirect } from "react-router";
 import { Layout } from "./components/Layout";
 import { Dashboard } from "./screens/Dashboard";
+import { Synthesize } from "./screens/Synthesize";
 import { Search } from "./screens/Search";
 import { KnowledgeGraph } from "./screens/KnowledgeGraph";
 import { GapAnalysis } from "./screens/GapAnalysis";
@@ -31,6 +32,7 @@ export const router = createBrowserRouter([
     Component: Layout,
     children: [
       { index: true, Component: Dashboard },
+      { path: "synthesize", Component: Synthesize },
       { path: "search", Component: Search },
       { path: "knowledge-graph", Component: KnowledgeGraph },
       { path: "gaps", Component: GapAnalysis },
