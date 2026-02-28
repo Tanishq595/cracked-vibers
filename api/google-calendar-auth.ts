@@ -1,30 +1,57 @@
-// api/google-calendar-auth.ts
-import { NextApiRequest, NextApiResponse } from 'next';
-import * as GoogleAuth from 'google-auth-library';
+/**
+ * GET /api/google-calendar-auth
+ * Redirects the user to Google OAuth for Calendar read access.
+ * Used by Vite dev server — register in vite.config.ts.
+ */
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { OAuth2Client } from 'google-auth-library';
 
-const oauth2Client = new GoogleAuth.OAuth2Client({
-  clientId: process.env.GOOGLE_CLIENT_ID,
-  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  redirectUri: `http://localhost:3000/api/google-calendar-auth/callback`,
-});
+type ResWithRedirect = VercelResponse & { redirect?: (url: string) => void };
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method === 'GET') {
-    const authUrl = oauth2Client.generateAuthUrl({
-      access_type: 'offline',
-      scope: ['https://www.googleapis.com/auth/calendar.readonly'],
-    });
-    res.status(200).json({ url: authUrl });
-  } else if (req.method === 'POST') {
-    const code = req.body.code;
-    try {
-      const { tokens } = await oauth2Client.getToken(code);
-      res.status(200).json(tokens);
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to get access token' });
-    }
+const SCOPES = ['https://www.googleapis.com/auth/calendar.readonly'];
+
+function redirect(res: ResWithRedirect, url: string): void {
+  if (typeof res.redirect === 'function') {
+    res.redirect(url);
   } else {
-    res.setHeader('Allow', ['GET', 'POST']);
-    res.status(405).end(`Method ${req.method} Not Allowed`);
+    res.status(302);
+    res.setHeader?.('Location', url);
+    (res as unknown as { end: () => void }).end?.();
   }
+}
+
+export default async function handler(
+  req: VercelRequest,
+  res: ResWithRedirect
+): Promise<void> {
+  if (req.method !== 'GET') {
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const baseUrl = process.env.VITE_API_URL || 'http://localhost:3000';
+  const redirectUri = `${baseUrl.replace(/\/$/, '')}/api/google-calendar-auth/callback`;
+
+  if (!clientId || !clientSecret) {
+    res.status(500).json({
+      error: 'Google Calendar OAuth not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env',
+    });
+    return;
+  }
+
+  const oauth2Client = new OAuth2Client({
+    clientId,
+    clientSecret,
+    redirectUri,
+  });
+
+  const authUrl = oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    scope: SCOPES,
+    prompt: 'consent',
+  });
+
+  redirect(res, authUrl);
 }

@@ -39,6 +39,9 @@ import canvasCallbackHandler from './api/canvas-callback'
 import googleClassroomAuthHandler from './api/google-classroom-auth'
 import googleClassroomAuthCallbackHandler from './api/google-classroom-auth-callback'
 import googleClassroomDataHandler from './api/google-classroom-data'
+import googleCalendarAuthHandler from './api/google-calendar-auth'
+import googleCalendarAuthCallbackHandler from './api/google-calendar-callback'
+import googleCalendarEventsHandler from './api/google-calendar-events'
 
 function readBody(nodeReq: Connect.IncomingMessage): Promise<Record<string, unknown> | null> {
   return new Promise((resolve, reject) => {
@@ -103,6 +106,9 @@ const API_HANDLERS: Record<string, (req: Connect.IncomingMessage, res: Connect.S
   '/api/google-classroom-auth': runVercelHandlerGetWithRedirect(googleClassroomAuthHandler),
   '/api/google-classroom-auth/callback': runVercelHandlerGetWithRedirect(googleClassroomAuthCallbackHandler),
   '/api/google-classroom-data': runVercelHandlerGet(googleClassroomDataHandler),
+  '/api/google-calendar-auth': runVercelHandlerGetWithRedirect(googleCalendarAuthHandler),
+  '/api/google-calendar-auth/callback': runVercelHandlerGetWithRedirect(googleCalendarAuthCallbackHandler),
+  '/api/google-calendar-events': runVercelHandlerGet(googleCalendarEventsHandler),
 }
 
 type VercelReq = {
