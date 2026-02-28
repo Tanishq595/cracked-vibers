@@ -13,6 +13,7 @@ import { KnowledgeGraph } from "./screens/KnowledgeGraph";
 import { GapAnalysis } from "./screens/GapAnalysis";
 import { Planner } from "./screens/Planner";
 import { YouTube } from "./screens/YouTube";
+import { Classroom } from "./screens/Classroom";
 import { Login } from "./screens/Login";
 import { SignUp } from "./screens/SignUp";
 import { Onboarding } from "./screens/Onboarding";
@@ -58,6 +59,7 @@ export const router = createBrowserRouter([
               { path: "gaps", Component: GapAnalysis },
               { path: "planner", Component: Planner },
               { path: "youtube", Component: YouTube },
+              { path: "classroom", Component: Classroom },
             ],
           },
         ],

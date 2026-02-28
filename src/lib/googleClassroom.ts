@@ -1,5 +1,5 @@
 import { OAuth2Client } from 'google-auth-library';
-import * as googleClassroom from '@googleapis/classroom';
+import { google } from 'googleapis';
 
 const oauth2Client = new OAuth2Client({
   clientId: process.env.GOOGLE_CLIENT_ID,
@@ -8,11 +8,9 @@ const oauth2Client = new OAuth2Client({
 
 export async function getCourses(accessToken: string) {
   oauth2Client.setCredentials({ access_token: accessToken });
-  const classroom = googleClassroom('v1');
+  const classroom = google.classroom({ version: 'v1', auth: oauth2Client });
   try {
-    const response = await classroom.courses.list({
-      auth: oauth2Client,
-    });
+    const response = await classroom.courses.list({});
     return response.data.courses || [];
   } catch (error) {
     console.error('Failed to get courses:', error);
@@ -22,15 +20,36 @@ export async function getCourses(accessToken: string) {
 
 export async function getAnnouncements(courseId: string, accessToken: string) {
   oauth2Client.setCredentials({ access_token: accessToken });
-  const classroom = googleClassroom('v1');
+  const classroom = google.classroom({ version: 'v1', auth: oauth2Client });
   try {
-    const response = await classroom.courses.announcements.list({
-      auth: oauth2Client,
-      courseId,
-    });
+    const response = await classroom.courses.announcements.list({ courseId });
     return response.data.announcements || [];
   } catch (error) {
     console.error('Failed to get announcements:', error);
+    return [];
+  }
+}
+
+export async function getCoursework(courseId: string, accessToken: string) {
+  oauth2Client.setCredentials({ access_token: accessToken });
+  const classroom = google.classroom({ version: 'v1', auth: oauth2Client });
+  try {
+    const response = await classroom.courses.courseWork.list({ courseId });
+    return response.data.courseWork || [];
+  } catch (error) {
+    console.error('Failed to get coursework:', error);
+    return [];
+  }
+}
+
+export async function getCourseWorkMaterials(courseId: string, accessToken: string) {
+  oauth2Client.setCredentials({ access_token: accessToken });
+  const classroom = google.classroom({ version: 'v1', auth: oauth2Client });
+  try {
+    const response = await classroom.courses.courseWorkMaterials.list({ courseId });
+    return response.data.courseWorkMaterial || [];
+  } catch (error) {
+    console.error('Failed to get course work materials:', error);
     return [];
   }
 }

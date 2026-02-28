@@ -38,6 +38,7 @@ import canvasAuthUrlHandler from './api/canvas-auth-url'
 import canvasCallbackHandler from './api/canvas-callback'
 import googleClassroomAuthHandler from './api/google-classroom-auth'
 import googleClassroomAuthCallbackHandler from './api/google-classroom-auth-callback'
+import googleClassroomDataHandler from './api/google-classroom-data'
 
 function readBody(nodeReq: Connect.IncomingMessage): Promise<Record<string, unknown> | null> {
   return new Promise((resolve, reject) => {
@@ -101,6 +102,7 @@ const API_HANDLERS: Record<string, (req: Connect.IncomingMessage, res: Connect.S
   '/api/canvas/callback': runVercelHandlerGetWithRedirect(canvasCallbackHandler),
   '/api/google-classroom-auth': runVercelHandlerGetWithRedirect(googleClassroomAuthHandler),
   '/api/google-classroom-auth/callback': runVercelHandlerGetWithRedirect(googleClassroomAuthCallbackHandler),
+  '/api/google-classroom-data': runVercelHandlerGet(googleClassroomDataHandler),
 }
 
 type VercelReq = {

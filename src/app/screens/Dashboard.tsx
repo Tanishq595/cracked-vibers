@@ -73,7 +73,7 @@ const platforms: Array<{
   items: number;
   path?: string;
 }> = [
-  { name: 'Google Classroom', icon: BookOpen, color: '#34A853', bgColor: 'bg-emerald-500/10', borderColor: 'border-emerald-500/30', status: 'synced', items: 142 },
+  { name: 'Google Classroom', icon: BookOpen, color: '#34A853', bgColor: 'bg-emerald-500/10', borderColor: 'border-emerald-500/30', status: 'synced', items: 142, path: '/dashboard/classroom' },
   { name: 'Notion', icon: FileText, color: '#000000', bgColor: 'bg-slate-500/10', borderColor: 'border-slate-500/30', status: 'synced', items: 89 },
   { name: 'YouTube', icon: Youtube, color: '#FF0000', bgColor: 'bg-red-500/10', borderColor: 'border-red-500/30', status: 'synced', items: 0, path: '/dashboard/youtube' },
   { name: 'Canvas', icon: Circle, color: '#E13F2F', bgColor: 'bg-orange-500/10', borderColor: 'border-orange-500/30', status: 'syncing', items: 67 },
@@ -213,6 +213,7 @@ export function Dashboard() {
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>(() => loadChatHistory(null));
   const [chatLoading, setChatLoading] = useState(false);
   const [youtubeHistoryCount, setYoutubeHistoryCount] = useState<number | null>(null);
+  const [classroomCourseCount, setClassroomCourseCount] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -232,6 +233,21 @@ export function Dashboard() {
       });
     return () => { cancelled = true; };
   }, [getToken]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/google-classroom-data', { credentials: 'include' })
+      .then((res) => (res.ok ? res.json() : { connected: false }))
+      .then((data) => {
+        if (cancelled) return;
+        const list = Array.isArray(data?.courses) ? data.courses : [];
+        setClassroomCourseCount(data?.connected ? list.length : 0);
+      })
+      .catch(() => {
+        if (!cancelled) setClassroomCourseCount(0);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     if (userId === null) return;
@@ -658,7 +674,11 @@ export function Dashboard() {
                       ? youtubeHistoryCount !== null
                         ? `${youtubeHistoryCount} items`
                         : '… items'
-                      : `${platform.items} items`}
+                      : platform.name === 'Google Classroom'
+                        ? classroomCourseCount !== null
+                          ? `${classroomCourseCount} course${classroomCourseCount !== 1 ? 's' : ''}`
+                          : '… courses'
+                        : `${platform.items} items`}
                   </p>
                 </div>
               </motion.div>
