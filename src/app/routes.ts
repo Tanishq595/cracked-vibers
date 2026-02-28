@@ -46,7 +46,7 @@ export const router = createBrowserRouter([
             children: [
               { index: true, Component: Dashboard },
               { path: "synthesize", Component: Synthesize },
-      { path: "search", Component: Search },
+              { path: "search", Component: Search },
               { path: "knowledge-graph", Component: KnowledgeGraph },
               { path: "gaps", Component: GapAnalysis },
               { path: "planner", Component: Planner },
