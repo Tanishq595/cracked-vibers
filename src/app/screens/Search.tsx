@@ -1,14 +1,12 @@
-import { useState } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Search as SearchIcon, 
-  Sparkles, 
-  Youtube, 
-  FileText, 
-  GraduationCap,
+import {
+  Search as SearchIcon,
+  Sparkles,
+  Globe,
   Clock,
   ExternalLink,
-  TrendingUp
+  Loader2,
 } from 'lucide-react';
 
 const suggestions = [
@@ -19,82 +17,72 @@ const suggestions = [
   'Renaissance art movement',
 ];
 
-const searchResults = [
-  {
-    category: 'AI-Synthesized',
-    icon: Sparkles,
-    color: '#ffb347',
-    items: [
-      {
-        title: 'Cellular Respiration: Complete Overview',
-        description: 'AI-generated summary from 3 sources: Combines your Notion notes on glycolysis, YouTube lecture on Krebs cycle, and Classroom assignment on electron transport chain.',
-        confidence: '95%',
-        lastUpdated: 'Synthesized 2 min ago',
-      },
-    ],
-  },
-  {
-    category: 'YouTube',
-    icon: Youtube,
-    color: '#FF0000',
-    items: [
-      {
-        title: 'Cellular Respiration and the Mighty Mitochondria - CrashCourse',
-        description: 'Learn about cellular respiration, the process by which organisms break down glucose into a form that the cell can use...',
-        duration: '12:45',
-        views: '2.1M views',
-        link: 'youtube.com',
-      },
-      {
-        title: 'Cellular Respiration (UPDATED) - Amoeba Sisters',
-        description: 'Updated cellular respiration video - Glycolysis, Krebs Cycle, Electron Transport Chain...',
-        duration: '8:32',
-        views: '856K views',
-        link: 'youtube.com',
-      },
-    ],
-  },
-  {
-    category: 'Notion',
-    icon: FileText,
-    color: '#ffffff',
-    items: [
-      {
-        title: 'Biology 201: Cellular Processes',
-        description: 'Your notes from Feb 15, 2026. Covers glycolysis pathway, ATP production, and mitochondrial structure...',
-        lastEdited: '3 days ago',
-        tags: ['Biology', 'Midterm'],
-      },
-      {
-        title: 'Cell Biology Study Guide',
-        description: 'Comprehensive guide including cellular respiration, photosynthesis comparison, and practice questions...',
-        lastEdited: '1 week ago',
-        tags: ['Study Guide'],
-      },
-    ],
-  },
-  {
-    category: 'Google Classroom',
-    icon: GraduationCap,
-    color: '#34A853',
-    items: [
-      {
-        title: 'Assignment: Cellular Respiration Lab Report',
-        description: 'Due March 5, 2026. Analyze the efficiency of cellular respiration under different conditions...',
-        dueDate: '5 days left',
-        status: 'In Progress',
-      },
-    ],
-  },
-];
+type ExaResultItem = { title: string; url: string; description?: string };
 
 export function Search() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showResults, setShowResults] = useState(false);
+  const [searchResults, setSearchResults] = useState<ExaResultItem[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchTimeMs, setSearchTimeMs] = useState<number | null>(null);
+  const [hasSearched, setHasSearched] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const runSearch = useCallback(async (query: string) => {
+    const q = query.trim();
+    if (!q) {
+      setShowResults(false);
+      setSearchResults([]);
+      setSearchError(null);
+      return;
+    }
+    setSearchQuery(q);
+    setShowResults(true);
+    setSearchLoading(true);
+    setSearchError(null);
+    setSearchTimeMs(null);
+    if (abortRef.current) abortRef.current.abort();
+    abortRef.current = new AbortController();
+    const start = performance.now();
+    try {
+      const res = await fetch('/api/search-exa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: q }),
+        signal: abortRef.current.signal,
+      });
+      const data = await res.json();
+      const elapsed = Math.round(performance.now() - start);
+      setSearchTimeMs(elapsed);
+      if (!res.ok) {
+        setSearchError(data.error ?? 'Search failed');
+        setSearchResults([]);
+        return;
+      }
+      setSearchResults(Array.isArray(data.results) ? data.results : []);
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') return;
+      setSearchError(e instanceof Error ? e.message : 'Search failed');
+      setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
+      setHasSearched(true);
+      abortRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => () => { abortRef.current?.abort(); }, []);
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
-    setShowResults(query.length > 0);
+    if (query.trim().length > 0) setShowResults(true);
+    else setShowResults(false);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    runSearch(searchQuery);
   };
 
   return (
@@ -120,17 +108,19 @@ export function Search() {
         transition={{ delay: 0.1 }}
         className="mb-6 md:mb-8"
       >
-        <div className="relative group">
-          <SearchIcon className="absolute left-4 md:left-6 top-1/2 -translate-y-1/2 w-5 md:w-6 h-5 md:h-6 text-slate-400 group-focus-within:text-[#ffb347] transition-colors" />
-          <Sparkles className="absolute right-4 md:right-6 top-1/2 -translate-y-1/2 w-5 md:w-6 h-5 md:h-6 text-[#ffb347] opacity-60 group-focus-within:opacity-100 transition-opacity hidden md:block" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => handleSearch(e.target.value)}
-            placeholder="What do you want to learn about?"
-            className="w-full pl-12 md:pl-16 pr-12 md:pr-16 py-5 md:py-6 text-lg md:text-xl bg-white hover:bg-slate-50 focus:bg-white border-2 border-slate-200 focus:border-[#ffb347] focus:ring-4 focus:ring-[#ffb347]/20 rounded-2xl text-slate-900 placeholder-slate-400 outline-none transition-all shadow-sm focus:shadow-lg"
-          />
-        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="relative group">
+            <SearchIcon className="absolute left-4 md:left-6 top-1/2 -translate-y-1/2 w-5 md:w-6 h-5 md:h-6 text-slate-400 group-focus-within:text-[#ffb347] transition-colors" />
+            <Sparkles className="absolute right-4 md:right-6 top-1/2 -translate-y-1/2 w-5 md:w-6 h-5 md:h-6 text-[#ffb347] opacity-60 group-focus-within:opacity-100 transition-opacity hidden md:block" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => handleSearch(e.target.value)}
+              placeholder="What do you want to learn about?"
+              className="w-full pl-12 md:pl-16 pr-12 md:pr-16 py-5 md:py-6 text-lg md:text-xl bg-white hover:bg-slate-50 focus:bg-white border-2 border-slate-200 focus:border-[#ffb347] focus:ring-4 focus:ring-[#ffb347]/20 rounded-2xl text-slate-900 placeholder-slate-400 outline-none transition-all shadow-sm focus:shadow-lg"
+            />
+          </div>
+        </form>
 
         {/* Search Suggestions */}
         {!showResults && (
@@ -144,9 +134,10 @@ export function Search() {
             {suggestions.map((suggestion) => (
               <motion.button
                 key={suggestion}
+                type="button"
                 whileHover={{ scale: 1.05, y: -1 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => handleSearch(suggestion)}
+                onClick={() => runSearch(suggestion)}
                 className="px-4 py-2 bg-slate-50 hover:bg-[#ffb347]/10 border border-slate-200 hover:border-[#ffb347]/50 rounded-xl text-sm text-slate-700 hover:text-[#ff8c42] transition-all font-medium shadow-sm"
               >
                 {suggestion}
@@ -166,97 +157,79 @@ export function Search() {
             className="space-y-8"
           >
             {/* Results Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <p className="text-slate-600 font-medium">
-                Found <span className="text-slate-900 font-bold">12 results</span> for "{searchQuery}"
+                {searchLoading ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Searching…
+                  </span>
+                ) : (
+                  <>
+                    Found <span className="text-slate-900 font-bold">{searchResults.length} results</span> for &quot;{searchQuery}&quot;
+                  </>
+                )}
               </p>
-              <div className="flex items-center gap-2 text-sm text-slate-500 font-medium">
-                <Clock className="w-4 h-4" />
-                <span>Results in 0.43s</span>
-              </div>
+              {searchTimeMs != null && !searchLoading && (
+                <div className="flex items-center gap-2 text-sm text-slate-500 font-medium">
+                  <Clock className="w-4 h-4" />
+                  <span>Results in {(searchTimeMs / 1000).toFixed(2)}s</span>
+                </div>
+              )}
             </div>
 
-            {/* Results by Category */}
-            {searchResults.map((category, catIndex) => {
-              const Icon = category.icon;
-              return (
-                <motion.div
-                  key={category.category}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: catIndex * 0.1 }}
-                  className="space-y-4"
-                >
-                  {/* Category Header */}
-                  <div className="flex items-center gap-3">
-                    <div 
-                      className="w-10 h-10 rounded-xl flex items-center justify-center shadow-sm"
-                      style={{ backgroundColor: `${category.color === '#ffffff' ? '#ffb347' : category.color}20` }}
-                    >
-                      <Icon className="w-5 h-5" style={{ color: category.color === '#ffffff' ? '#ffb347' : category.color }} />
-                    </div>
-                    <h2 className="text-lg font-bold text-slate-900">{category.category}</h2>
-                    <div className="flex-1 h-px bg-slate-200" />
-                  </div>
+            {searchError && (
+              <p className="text-red-600 text-sm font-medium py-2">{searchError}</p>
+            )}
 
-                  {/* Category Items */}
-                  <div className="space-y-3">
-                    {category.items.map((item, itemIndex) => (
-                      <motion.div
-                        key={itemIndex}
-                        whileHover={{ x: 4, scale: 1.005 }}
-                        whileTap={{ scale: 0.98 }}
-                        className="group p-6 rounded-2xl bg-white hover:bg-[#ffb347]/10 border border-slate-200 hover:border-[#ffb347]/50 transition-all cursor-pointer shadow-sm hover:shadow-md"
-                      >
-                        <div className="flex items-start justify-between mb-3">
-                          <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#ff8c42] transition-colors flex-1">
-                            {item.title}
-                          </h3>
-                          <ExternalLink className="w-5 h-5 text-slate-400 group-hover:text-[#ffb347] transition-colors ml-4" />
-                        </div>
-                        
-                        <p className="text-slate-600 text-sm mb-4 font-medium">
+            {/* Web (Exa) results */}
+            {!searchLoading && searchResults.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="space-y-4"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-sm bg-[#ffb347]/20">
+                    <Globe className="w-5 h-5 text-[#ff8c42]" />
+                  </div>
+                  <h2 className="text-lg font-bold text-slate-900">Web Results</h2>
+                  <div className="flex-1 h-px bg-slate-200" />
+                </div>
+                <div className="space-y-3">
+                  {searchResults.map((item, itemIndex) => (
+                    <motion.a
+                      key={itemIndex}
+                      href={item.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      whileHover={{ x: 4, scale: 1.005 }}
+                      whileTap={{ scale: 0.98 }}
+                      className="group block p-6 rounded-2xl bg-white hover:bg-[#ffb347]/10 border border-slate-200 hover:border-[#ffb347]/50 transition-all cursor-pointer shadow-sm hover:shadow-md"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <h3 className="text-lg font-bold text-slate-900 group-hover:text-[#ff8c42] transition-colors flex-1">
+                          {item.title}
+                        </h3>
+                        <ExternalLink className="w-5 h-5 text-slate-400 group-hover:text-[#ffb347] transition-colors ml-4 shrink-0" />
+                      </div>
+                      {item.description && (
+                        <p className="text-slate-600 text-sm font-medium line-clamp-2">
                           {item.description}
                         </p>
+                      )}
+                    </motion.a>
+                  ))}
+                </div>
+              </motion.div>
+            )}
 
-                        <div className="flex flex-wrap items-center gap-3 text-xs font-semibold">
-                          {'confidence' in item && (
-                            <span className="flex items-center gap-1 px-3 py-1.5 bg-[#ffb347]/20 text-[#ff8c42] rounded-lg">
-                              <TrendingUp className="w-3 h-3" />
-                              {item.confidence} confidence
-                            </span>
-                          )}
-                          {'duration' in item && (
-                            <span className="flex items-center gap-1 text-slate-600">
-                              <Clock className="w-3 h-3" />
-                              {item.duration}
-                            </span>
-                          )}
-                          {'views' in item && <span className="text-slate-600">{item.views}</span>}
-                          {'lastEdited' in item && <span className="text-slate-600">Edited {item.lastEdited}</span>}
-                          {'lastUpdated' in item && <span className="text-slate-600">{item.lastUpdated}</span>}
-                          {'dueDate' in item && (
-                            <span className="px-3 py-1.5 bg-orange-100 text-orange-700 rounded-lg">
-                              {item.dueDate}
-                            </span>
-                          )}
-                          {'tags' in item && item.tags.map((tag) => (
-                            <span key={tag} className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded-lg">
-                              {tag}
-                            </span>
-                          ))}
-                          {'status' in item && (
-                            <span className="px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg">
-                              {item.status}
-                            </span>
-                          )}
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
-                </motion.div>
-              );
-            })}
+            {hasSearched && !searchLoading && searchResults.length === 0 && !searchError && (
+              <p className="text-slate-500 font-medium">No results. Try a different query.</p>
+            )}
+            {showResults && !hasSearched && !searchLoading && (
+              <p className="text-slate-500 font-medium">Press Enter to search the web.</p>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
