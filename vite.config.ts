@@ -28,7 +28,10 @@ import ttsElevenHandler from './api/tts-eleven'
 import coachResponseHandler from './api/coach-response'
 import searchExaHandler from './api/search-exa'
 import searchLibraryHandler from './api/search-library'
+import searchYoutubeHandler from './api/search-youtube'
 import chatMessagesHandler from './api/chat-messages'
+import youtubeAuthHandler from './api/youtube-auth'
+import youtubeCallbackHandler from './api/youtube-callback'
 
 function readBody(nodeReq: Connect.IncomingMessage): Promise<Record<string, unknown> | null> {
   return new Promise((resolve, reject) => {
@@ -74,7 +77,10 @@ const API_HANDLERS: Record<string, (req: Connect.IncomingMessage, res: Connect.S
   '/api/coach-response': runVercelHandlerWithBody(coachResponseHandler),
   '/api/search-exa': runVercelHandlerWithBody(searchExaHandler),
   '/api/search-library': runVercelHandlerWithBody(searchLibraryHandler),
+  '/api/search-youtube': runVercelHandlerWithBody(searchYoutubeHandler),
   '/api/chat-messages': runVercelHandlerWithBody(chatMessagesHandler),
+  '/api/youtube-auth': runVercelHandlerWithQuery(youtubeAuthHandler),
+  '/api/youtube-callback': runVercelHandlerWithQuery(youtubeCallbackHandler),
 }
 
 type VercelReq = {
@@ -83,7 +89,10 @@ type VercelReq = {
   body?: unknown
   query?: Record<string, string | string[] | undefined>
 }
-type VercelRes = { status: (n: number) => { json: (b: object) => void } }
+type VercelRes = {
+  status: (n: number) => { json: (b: object) => void }
+  redirect?: (code: number, url: string) => void
+}
 
 function runVercelHandler(handler: (req: VercelReq, res: VercelRes) => Promise<void>) {
   return async (nodeReq: Connect.IncomingMessage, nodeRes: Connect.ServerResponse) => {
@@ -106,21 +115,54 @@ function runVercelHandler(handler: (req: VercelReq, res: VercelRes) => Promise<v
   }
 }
 
+function parseQuery(nodeReq: Connect.IncomingMessage): Record<string, string | string[]> {
+  const url = nodeReq.url ?? ''
+  const q = url.includes('?') ? url.split('?')[1] : ''
+  const query: Record<string, string | string[]> = {}
+  if (q) {
+    for (const part of q.split('&')) {
+      const [k, v] = part.split('=')
+      if (k) query[decodeURIComponent(k)] = v ? decodeURIComponent(v) : ''
+    }
+  }
+  return query
+}
+
+function runVercelHandlerWithQuery(handler: (req: VercelReq, res: VercelRes) => Promise<void>) {
+  return async (nodeReq: Connect.IncomingMessage, nodeRes: Connect.ServerResponse) => {
+    const query = parseQuery(nodeReq)
+    const req: VercelReq = {
+      method: nodeReq.method,
+      headers: nodeReq.headers as Record<string, string | string[] | undefined>,
+      query,
+    }
+    const res: VercelRes = {
+      status(code: number) {
+        nodeRes.statusCode = code
+        return {
+          json(body: object) {
+            nodeRes.setHeader('Content-Type', 'application/json')
+            nodeRes.end(JSON.stringify(body))
+          },
+        }
+      },
+      redirect(code: number, url: string) {
+        nodeRes.statusCode = code
+        nodeRes.setHeader('Location', url)
+        nodeRes.end()
+      },
+    }
+    await handler(req, res)
+  }
+}
+
 function runVercelHandlerWithBody(handler: (req: VercelReq, res: VercelRes) => Promise<void>) {
   return async (nodeReq: Connect.IncomingMessage, nodeRes: Connect.ServerResponse) => {
     let body: Record<string, unknown> | null = null
     if (nodeReq.method === 'POST' || nodeReq.method === 'PUT' || nodeReq.method === 'PATCH') {
       body = await readBody(nodeReq)
     }
-    const url = nodeReq.url ?? ''
-    const q = url.includes('?') ? url.split('?')[1] : ''
-    const query: Record<string, string | string[]> = {}
-    if (q) {
-      for (const part of q.split('&')) {
-        const [k, v] = part.split('=')
-        if (k) query[decodeURIComponent(k)] = v ? decodeURIComponent(v) : ''
-      }
-    }
+    const query = parseQuery(nodeReq)
     const req: VercelReq = {
       method: nodeReq.method,
       headers: nodeReq.headers as Record<string, string | string[] | undefined>,
@@ -136,6 +178,11 @@ function runVercelHandlerWithBody(handler: (req: VercelReq, res: VercelRes) => P
             nodeRes.end(JSON.stringify(body))
           },
         }
+      },
+      redirect(code: number, url: string) {
+        nodeRes.statusCode = code
+        nodeRes.setHeader('Location', url)
+        nodeRes.end()
       },
     }
     await handler(req, res)
@@ -170,6 +217,19 @@ export default defineConfig({
       configureServer(server) {
         server.middlewares.use(async (nodeReq: Connect.IncomingMessage, nodeRes: Connect.ServerResponse, next: Connect.NextFunction) => {
           const url = nodeReq.url?.split('?')[0] ?? ''
+          if (url === '/api/youtube-data') {
+            try {
+              const m = await import('./api/youtube-data')
+              const run = runVercelHandlerWithQuery(m.default)
+              await run(nodeReq, nodeRes)
+            } catch (err) {
+              console.error('[api-dev]', err)
+              nodeRes.statusCode = 500
+              nodeRes.setHeader('Content-Type', 'application/json')
+              nodeRes.end(JSON.stringify({ error: 'Internal server error' }))
+            }
+            return
+          }
           const run = API_HANDLERS[url]
           if (!run) return next()
           try {

@@ -9,7 +9,9 @@ import {
   ExternalLink,
   Loader2,
   FileText,
+  Youtube,
 } from 'lucide-react';
+import { useAuth } from '@clerk/clerk-react';
 import { AIChatAssistant } from '../components/AIChatAssistant';
 import { Label } from '../components/ui/label';
 import { Switch } from '../components/ui/switch';
@@ -23,19 +25,22 @@ const suggestions = [
   'Renaissance art movement',
 ];
 
-type SearchResultItem = { title: string; url?: string; description?: string; key?: string };
+type SearchResultItem = { title: string; url?: string; description?: string; key?: string; thumbnailUrl?: string; videoId?: string };
 
 export function Search() {
   const { user } = useUser();
+  const { getToken } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [showResults, setShowResults] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
+  const [youtubeResults, setYoutubeResults] = useState<SearchResultItem[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searchTimeMs, setSearchTimeMs] = useState<number | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [searchInLibrary, setSearchInLibrary] = useState(false);
   const [lastSearchWasLibrary, setLastSearchWasLibrary] = useState(false);
+  const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const runSearch = useCallback(async (query: string) => {
@@ -91,21 +96,45 @@ export function Search() {
         );
       } else {
         setLastSearchWasLibrary(false);
-        const res = await fetch('/api/search-exa', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: q }),
-          signal: abortRef.current.signal,
-        });
-        const data = await res.json();
+        setYoutubeResults([]);
+        const token = await getToken();
+        const [exaRes, youtubeRes] = await Promise.all([
+          fetch('/api/search-exa', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: q }),
+            signal: abortRef.current.signal,
+          }),
+          token
+            ? fetch('/api/search-youtube', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ query: q }),
+                signal: abortRef.current.signal,
+              }).catch(() => ({ ok: false, json: () => ({ results: [] }) }))
+            : Promise.resolve({ ok: true, json: () => ({ results: [] }) }),
+        ]);
+        const exaData = await exaRes.json();
         const elapsed = Math.round(performance.now() - start);
         setSearchTimeMs(elapsed);
-        if (!res.ok) {
-          setSearchError(data.error ?? 'Search failed');
+        if (!exaRes.ok) {
+          setSearchError(exaData.error ?? 'Search failed');
           setSearchResults([]);
           return;
         }
-        setSearchResults(Array.isArray(data.results) ? data.results : []);
+        setSearchResults(Array.isArray(exaData.results) ? exaData.results : []);
+        const ytData = await (youtubeRes as Response).json();
+        const ytList = Array.isArray(ytData.results) ? ytData.results : [];
+        setYoutubeResults(
+          ytList.map((r: { title?: string; url?: string; description?: string; thumbnailUrl?: string; videoId?: string }) => ({
+            title: r.title ?? '',
+            url: r.url,
+            description: r.description,
+            thumbnailUrl: r.thumbnailUrl,
+            videoId: r.videoId,
+          }))
+        );
+        setPlayingVideoId(null);
       }
     } catch (e) {
       if ((e as Error).name === 'AbortError') return;
@@ -116,7 +145,7 @@ export function Search() {
       setHasSearched(true);
       abortRef.current = null;
     }
-  }, [searchInLibrary, user?.id]);
+  }, [searchInLibrary, user?.id, getToken]);
 
   useEffect(() => () => { abortRef.current?.abort(); }, []);
 
@@ -225,7 +254,7 @@ export function Search() {
                   </span>
                 ) : (
                   <>
-                    Found <span className="text-slate-900 font-bold">{searchResults.length} results</span> for &quot;{searchQuery}&quot;
+                    Found <span className="text-slate-900 font-bold">{searchResults.length + (youtubeResults?.length ?? 0)} results</span> for &quot;{searchQuery}&quot;
                   </>
                 )}
               </p>
@@ -239,6 +268,99 @@ export function Search() {
 
             {searchError && (
               <p className="text-red-600 text-sm font-medium py-2">{searchError}</p>
+            )}
+
+            {/* Embedded YouTube player (when a video is selected) */}
+            {!searchInLibrary && playingVideoId && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-2xl border-2 border-slate-200 bg-slate-900 overflow-hidden shadow-xl"
+              >
+                <div className="aspect-video w-full">
+                  <iframe
+                    title="YouTube player"
+                    src={`https://www.youtube.com/embed/${playingVideoId}?autoplay=1`}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                    className="w-full h-full"
+                  />
+                </div>
+                <div className="p-3 flex items-center justify-between bg-slate-800">
+                  <p className="text-sm text-slate-300">Playing in app</p>
+                  <a
+                    href={`https://www.youtube.com/watch?v=${playingVideoId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-red-400 hover:text-red-300 font-medium flex items-center gap-1"
+                  >
+                    Open on YouTube <ExternalLink className="w-4 h-4" />
+                  </a>
+                </div>
+              </motion.div>
+            )}
+
+            {/* YouTube results (when Web search and connected) */}
+            {!searchInLibrary && !searchLoading && youtubeResults.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="space-y-4"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-sm bg-red-100">
+                    <Youtube className="w-5 h-5 text-red-600" />
+                  </div>
+                  <h2 className="text-lg font-bold text-slate-900">YouTube</h2>
+                  <div className="flex-1 h-px bg-slate-200" />
+                </div>
+                <p className="text-sm text-slate-600">Click a video to play above</p>
+                <div className="space-y-3">
+                  {youtubeResults.map((item, itemIndex) => {
+                    const id = item.videoId ?? (item.url ? (() => { try { return new URL(item.url).searchParams.get('v'); } catch { return null; } })() : null);
+                    return (
+                      <motion.div
+                        key={itemIndex}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => id && setPlayingVideoId(id)}
+                        onKeyDown={(e) => e.key === 'Enter' && id && setPlayingVideoId(id)}
+                        whileHover={{ x: 4, scale: 1.005 }}
+                        whileTap={{ scale: 0.98 }}
+                        className="group flex gap-4 p-4 rounded-2xl bg-white hover:bg-red-50/50 border border-slate-200 hover:border-red-200 transition-all cursor-pointer shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-red-500/50"
+                      >
+                        {item.thumbnailUrl && (
+                          <img
+                            src={item.thumbnailUrl}
+                            alt=""
+                            className="w-24 h-16 rounded-lg object-cover flex-shrink-0"
+                          />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <h3 className="text-lg font-bold text-slate-900 group-hover:text-red-600 transition-colors line-clamp-1">
+                            {item.title}
+                          </h3>
+                          {item.description && (
+                            <p className="text-slate-600 text-sm font-medium line-clamp-2 mt-0.5">
+                              {item.description}
+                            </p>
+                          )}
+                        </div>
+                        <a
+                          href={item.url ?? '#'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-slate-400 hover:text-red-500 transition-colors shrink-0 mt-1 p-1"
+                          title="Open on YouTube"
+                        >
+                          <ExternalLink className="w-5 h-5" />
+                        </a>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              </motion.div>
             )}
 
             {/* Web (Exa) results */}
@@ -292,7 +414,7 @@ export function Search() {
               </motion.div>
             )}
 
-            {hasSearched && !searchLoading && searchResults.length === 0 && !searchError && (
+            {hasSearched && !searchLoading && searchResults.length === 0 && (youtubeResults?.length ?? 0) === 0 && !searchError && (
               <p className="text-slate-500 font-medium">No results. Try a different query.</p>
             )}
             {showResults && !hasSearched && !searchLoading && (

@@ -16,7 +16,8 @@ import {
   X,
   LogOut,
   FolderOpen,
-  Mic
+  Mic,
+  Youtube
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -29,6 +30,7 @@ const navItems = [
   { path: '/dashboard/knowledge-graph', label: 'Graph', icon: Network },
   { path: '/dashboard/gaps', label: 'Gaps', icon: TrendingDown },
   { path: '/dashboard/planner', label: 'Planner', icon: Calendar },
+  { path: '/dashboard/youtube', label: 'YouTube', icon: Youtube },
 ];
 
 export function Layout() {

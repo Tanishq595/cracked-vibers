@@ -1,17 +1,18 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useNavigate } from 'react-router';
-import { 
-  CheckCircle2, 
-  Youtube, 
-  GraduationCap, 
-  FileText, 
-  ChevronRight, 
+import { useNavigate, useSearchParams } from 'react-router';
+import { useAuth } from '@clerk/clerk-react';
+import {
+  CheckCircle2,
+  Youtube,
+  GraduationCap,
+  FileText,
+  ChevronRight,
   Loader2,
   ArrowRight,
   Brain,
   Sparkles,
-  Circle
+  Circle,
 } from 'lucide-react';
 
 export function Onboarding() {
@@ -19,12 +20,45 @@ export function Onboarding() {
   const [connecting, setConnecting] = useState<string | null>(null);
   const [connected, setConnected] = useState<string[]>([]);
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { getToken } = useAuth();
 
-  const handleConnect = (platform: string) => {
+  useEffect(() => {
+    const youtube = searchParams.get('youtube');
+    if (youtube === 'connected') {
+      setConnected((prev) => (prev.includes('youtube') ? prev : [...prev, 'youtube']));
+      setSearchParams((p) => {
+        const next = new URLSearchParams(p);
+        next.delete('youtube');
+        next.delete('message');
+        return next;
+      }, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  const handleConnect = async (platform: string) => {
+    if (platform === 'youtube') {
+      setConnecting('youtube');
+      try {
+        const token = await getToken();
+        const res = await fetch('/api/youtube-auth', {
+          method: 'GET',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        const data = await res.json();
+        if (res.ok && typeof data?.url === 'string') {
+          window.location.href = data.url;
+          return;
+        }
+        setConnecting(null);
+      } catch {
+        setConnecting(null);
+      }
+      return;
+    }
     setConnecting(platform);
-    // Simulate OAuth delay
     setTimeout(() => {
-      setConnected(prev => [...prev, platform]);
+      setConnected((prev) => [...prev, platform]);
       setConnecting(null);
     }, 1500);
   };
