@@ -77,12 +77,12 @@ export function Layout() {
         sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
       }`}>
         {/* Logo - top left */}
-        <div className="p-6 border-b border-sidebar-border flex items-center min-h-[52px]">
+        <div className="h-20 px-6 border-b border-sidebar-border flex items-center">
           {showLogo ? (
             <img
               src={logoSrc}
               alt="Company logo"
-              className="max-h-8 w-auto object-contain object-left"
+              className="max-h-11 w-auto object-contain object-left ml-1"
               onError={handleLogoError}
             />
           ) : (
