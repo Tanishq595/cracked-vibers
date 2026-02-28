@@ -814,16 +814,44 @@ export function Dashboard() {
         )}
       </AnimatePresence>
 
-      {/* Hero Section - Floating AI Character */}
+      {/* Hero Section - Floating AI Character (grass background) */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#ffb347]/10 via-[#ff8c42]/10 to-[#ff6b35]/10 min-h-[500px] md:min-h-[600px]"
+        className="relative overflow-hidden rounded-3xl min-h-[500px] md:min-h-[600px]"
+        style={{
+          background: "linear-gradient(180deg, #87CEEB 0%, #98D8A6 20%, #7CB342 50%, #558B2F 75%, #33691E 100%)",
+        }}
       >
-        {/* Animated background elements */}
-        <div className="absolute top-0 right-0 w-96 h-96 bg-[#ffb347]/5 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#ff8c42]/5 rounded-full blur-2xl" />
+        {/* Grass blade layer at bottom */}
+        <svg
+          className="absolute bottom-0 left-0 right-0 h-40 w-full pointer-events-none"
+          preserveAspectRatio="none"
+          viewBox="0 0 1200 160"
+          fill="none"
+        >
+          <defs>
+            <pattern id="dashboard-grass-blades" x="0" y="0" width="80" height="160" patternUnits="userSpaceOnUse">
+              {[...Array(16)].map((_, i) => (
+                <ellipse
+                  key={i}
+                  cx={i * 5 + (i % 4) * 10}
+                  cy={120 - (i % 5) * 12}
+                  rx="5"
+                  ry="45"
+                  fill="#2E7D32"
+                  opacity={0.5 + (i % 4) * 0.12}
+                  transform={`rotate(${-20 + (i % 7) * 6} ${i * 5 + (i % 4) * 10} ${120 - (i % 5) * 12})`}
+                />
+              ))}
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#dashboard-grass-blades)" />
+        </svg>
+        {/* Subtle animated grass-toned highlights */}
+        <div className="absolute top-0 right-0 w-96 h-96 bg-[#98D8A6]/20 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#558B2F]/25 rounded-full blur-2xl" />
         
         {/* Mascot Character */}
         <div className="absolute inset-0 flex items-center justify-center">
