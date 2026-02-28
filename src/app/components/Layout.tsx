@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router';
 import { useState, useEffect, useRef } from 'react';
-import { useClerk, useUser } from '@clerk/clerk-react';
+import { useAuth, useClerk, useUser } from '@clerk/clerk-react';
 const LOGO_SVG = '/company_logo/logo.png';
 const LOGO_PNG = '/company_logo/logo.png';
 import {
@@ -39,6 +39,48 @@ export function Layout() {
   const navigate = useNavigate();
   const { signOut } = useClerk();
   const { user } = useUser();
+  const { getToken } = useAuth();
+  const [youtubeConnected, setYoutubeConnected] = useState<boolean | null>(null);
+  const [classroomConnected, setClassroomConnected] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getToken()
+      .then((token) => {
+        if (!token) {
+          setYoutubeConnected(false);
+          return;
+        }
+        return fetch('/api/youtube-data', { method: 'GET', headers: { Authorization: `Bearer ${token}` } });
+      })
+      .then((res) => (res?.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        setYoutubeConnected(data?.connected === true);
+      })
+      .catch(() => {
+        if (!cancelled) setYoutubeConnected(false);
+      });
+    return () => { cancelled = true; };
+  }, [getToken]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/google-classroom-data', { credentials: 'include' })
+      .then((res) => (res.ok ? res.json() : { connected: false }))
+      .then((data) => {
+        if (cancelled) return;
+        setClassroomConnected(data?.connected === true);
+      })
+      .catch(() => {
+        if (!cancelled) setClassroomConnected(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const platformsSyncedCount =
+    (youtubeConnected === true ? 1 : 0) + (classroomConnected === true ? 1 : 0);
+
   const handleSignOut = () => {
     setProfileOpen(false);
     signOut(() => navigate('/login'));
@@ -188,7 +230,7 @@ export function Layout() {
           })}
         </nav>
 
-        {/* Platform Status */}
+        {/* Platform Status - YouTube & Google Classroom with real connection count */}
         <div className="p-4 border-t border-sidebar-border bg-sidebar-accent/30">
           <div className="flex items-center gap-2 mb-3">
             <Link2 className="w-4 h-4 text-muted-foreground" />
@@ -196,20 +238,41 @@ export function Layout() {
           </div>
           <div className="flex items-center gap-2">
             <div className="flex -space-x-2">
-              <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border-2 border-emerald-500/50 flex items-center justify-center">
-                <div className="w-2 h-2 rounded-full bg-emerald-500" />
-              </div>
-              <div className="w-8 h-8 rounded-lg bg-slate-500/20 border-2 border-slate-500/50 flex items-center justify-center">
-                <div className="w-2 h-2 rounded-full bg-slate-400" />
-              </div>
-              <div className="w-8 h-8 rounded-lg bg-red-500/20 border-2 border-red-500/50 flex items-center justify-center">
-                <div className="w-2 h-2 rounded-full bg-red-500" />
-              </div>
-              <div className="w-8 h-8 rounded-lg bg-orange-500/20 border-2 border-orange-500/50 flex items-center justify-center">
-                <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-              </div>
+              <Link
+                to="/dashboard/youtube"
+                className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center overflow-hidden hover:ring-2 hover:ring-red-500/50 transition-all shrink-0 ${
+                  youtubeConnected === true
+                    ? 'border-red-500/50 bg-red-500/10'
+                    : 'border-sidebar-border bg-card opacity-70'
+                }`}
+                title={youtubeConnected === true ? 'YouTube connected' : 'YouTube'}
+              >
+                <svg viewBox="0 0 28.57 20" className="w-5 h-5 shrink-0" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                  <path d="M27.9727 3.12324C27.6435 1.89323 26.6768 0.926623 25.4468 0.597366C23.2197 2.24288e-07 14.285 0 14.285 0C14.285 0 5.35042 2.24288e-07 3.12323 0.597366C1.89323 0.926623 0.926623 1.89323 0.597366 3.12324C2.24288e-07 5.35042 0 10 0 10C0 10 2.24288e-07 14.6496 0.597366 16.8768C0.926623 18.1068 1.89323 19.0734 3.12323 19.4026C5.35042 20 14.285 20 14.285 20C14.285 20 23.2197 20 25.4468 19.4026C26.6768 19.0734 27.6435 18.1068 27.9727 16.8768C28.5701 14.6496 28.5701 10 28.5701 10C28.5701 10 28.5677 5.35042 27.9727 3.12324Z" fill="#FF0000" />
+                  <path d="M11.4253 14.2854L18.8477 10.0004L11.4253 5.71533V14.2854Z" fill="white" />
+                </svg>
+              </Link>
+              <Link
+                to="/dashboard/classroom"
+                className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center overflow-hidden hover:ring-2 hover:ring-emerald-500/50 transition-all shrink-0 ${
+                  classroomConnected === true
+                    ? 'border-emerald-500/50 bg-emerald-500/10'
+                    : 'border-sidebar-border bg-card opacity-70'
+                }`}
+                title={classroomConnected === true ? 'Google Classroom connected' : 'Google Classroom'}
+              >
+                <img
+                  src="https://www.gstatic.com/classroom/logo_square_48.svg"
+                  alt="Google Classroom"
+                  className="w-5 h-5 object-contain"
+                />
+              </Link>
             </div>
-            <span className="text-sm text-sidebar-foreground font-semibold">4 synced</span>
+            <span className="text-sm text-sidebar-foreground font-semibold">
+              {youtubeConnected === null && classroomConnected === null
+                ? '… synced'
+                : `${platformsSyncedCount} synced`}
+            </span>
           </div>
         </div>
       </aside>
