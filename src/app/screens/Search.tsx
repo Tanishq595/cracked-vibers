@@ -323,8 +323,30 @@ export function Search() {
                         key={itemIndex}
                         role="button"
                         tabIndex={0}
-                        onClick={() => id && setPlayingVideoId(id)}
-                        onKeyDown={(e) => e.key === 'Enter' && id && setPlayingVideoId(id)}
+                        onClick={() => {
+                          if (!id) return;
+                          setPlayingVideoId(id);
+                          getToken().then((token) => {
+                            if (!token) return;
+                            fetch('/api/youtube-watch-history', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                              body: JSON.stringify({ video_id: id, video_url: item.url, title: item.title }),
+                            }).catch(() => {});
+                          });
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter' || !id) return;
+                          setPlayingVideoId(id);
+                          getToken().then((token) => {
+                            if (!token) return;
+                            fetch('/api/youtube-watch-history', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                              body: JSON.stringify({ video_id: id, video_url: item.url, title: item.title }),
+                            }).catch(() => {});
+                          });
+                        }}
                         whileHover={{ x: 4, scale: 1.005 }}
                         whileTap={{ scale: 0.98 }}
                         className="group flex gap-4 p-4 rounded-2xl bg-white hover:bg-red-50/50 border border-slate-200 hover:border-red-200 transition-all cursor-pointer shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-red-500/50"

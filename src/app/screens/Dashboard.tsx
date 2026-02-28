@@ -56,43 +56,20 @@ function saveChatHistory(userId: string | null, messages: { role: "user" | "assi
   }
 }
 
-const platforms = [
-  { 
-    name: 'Google Classroom', 
-    icon: BookOpen,
-    color: '#34A853',
-    bgColor: 'bg-emerald-500/10',
-    borderColor: 'border-emerald-500/30',
-    status: 'synced',
-    items: 142
-  },
-  { 
-    name: 'Notion', 
-    icon: FileText,
-    color: '#000000',
-    bgColor: 'bg-slate-500/10',
-    borderColor: 'border-slate-500/30',
-    status: 'synced',
-    items: 89
-  },
-  { 
-    name: 'YouTube', 
-    icon: Youtube,
-    color: '#FF0000',
-    bgColor: 'bg-red-500/10',
-    borderColor: 'border-red-500/30',
-    status: 'synced',
-    items: 234
-  },
-  { 
-    name: 'Canvas', 
-    icon: Circle,
-    color: '#E13F2F',
-    bgColor: 'bg-orange-500/10',
-    borderColor: 'border-orange-500/30',
-    status: 'syncing',
-    items: 67
-  },
+const platforms: Array<{
+  name: string;
+  icon: typeof Youtube;
+  color: string;
+  bgColor: string;
+  borderColor: string;
+  status: string;
+  items: number;
+  path?: string;
+}> = [
+  { name: 'Google Classroom', icon: BookOpen, color: '#34A853', bgColor: 'bg-emerald-500/10', borderColor: 'border-emerald-500/30', status: 'synced', items: 142 },
+  { name: 'Notion', icon: FileText, color: '#000000', bgColor: 'bg-slate-500/10', borderColor: 'border-slate-500/30', status: 'synced', items: 89 },
+  { name: 'YouTube', icon: Youtube, color: '#FF0000', bgColor: 'bg-red-500/10', borderColor: 'border-red-500/30', status: 'synced', items: 0, path: '/dashboard/youtube' },
+  { name: 'Canvas', icon: Circle, color: '#E13F2F', bgColor: 'bg-orange-500/10', borderColor: 'border-orange-500/30', status: 'syncing', items: 67 },
 ];
 
 const insights = [
@@ -228,6 +205,26 @@ export function Dashboard() {
   const [bubbleTriggered, setBubbleTriggered] = useState(false);
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>(() => loadChatHistory(null));
   const [chatLoading, setChatLoading] = useState(false);
+  const [youtubeHistoryCount, setYoutubeHistoryCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getToken()
+      .then((token) => {
+        if (!token) return;
+        return fetch('/api/youtube-watch-history', { method: 'GET', headers: { Authorization: `Bearer ${token}` } });
+      })
+      .then((res) => (res?.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        const list = Array.isArray(data?.history) ? data.history : [];
+        setYoutubeHistoryCount(list.length);
+      })
+      .catch(() => {
+        if (!cancelled) setYoutubeHistoryCount(0);
+      });
+    return () => { cancelled = true; };
+  }, [getToken]);
 
   useEffect(() => {
     if (userId === null) return;
@@ -496,6 +493,9 @@ export function Dashboard() {
                 transition={{ delay: 0.2 + index * 0.05 }}
                 whileHover={{ scale: 1.03, y: -4 }}
                 whileTap={{ scale: 0.98 }}
+                onClick={() => {
+                  if (platform.path) navigate(platform.path);
+                }}
                 className={`relative overflow-hidden rounded-2xl bg-card border-2 ${platform.borderColor} p-6 cursor-pointer group hover:shadow-lg hover:shadow-black/20 transition-all`}
               >
                 <div className={`absolute top-0 right-0 w-32 h-32 ${platform.bgColor} rounded-full blur-3xl opacity-50 group-hover:opacity-100 transition-opacity`} />
@@ -518,7 +518,13 @@ export function Dashboard() {
                   </div>
                   
                   <h3 className="font-bold text-foreground mb-1">{platform.name}</h3>
-                  <p className="text-sm text-muted-foreground">{platform.items} items</p>
+                  <p className="text-sm text-muted-foreground">
+                    {platform.name === 'YouTube'
+                      ? youtubeHistoryCount !== null
+                        ? `${youtubeHistoryCount} items`
+                        : '… items'
+                      : `${platform.items} items`}
+                  </p>
                 </div>
               </motion.div>
             );
