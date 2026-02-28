@@ -1,9 +1,13 @@
 import { motion } from 'motion/react';
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { Brain } from 'lucide-react';
 import { SignIn } from '@clerk/clerk-react';
 
 export function Login() {
+  const { pathname } = useLocation();
+  const isSignInPath = pathname.startsWith('/sign-in');
+  const clerkPath = isSignInPath ? '/sign-in' : '/login';
+
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 relative overflow-hidden">
       {/* Background Decorations */}
@@ -28,7 +32,7 @@ export function Login() {
 
         <SignIn
           routing="path"
-          path="/login"
+          path={clerkPath}
           signUpUrl="/signup"
           fallbackRedirectUrl="/onboarding"
           appearance={{
