@@ -6,7 +6,7 @@
 
 ## Overview
 
-M.U.S.T.Learn is a full-stack learning platform that helps learners unify content from **Google Classroom**, **Notion**, **YouTube**, **Canvas**, or manual paste. The app uses **MiniMax** (LLM + TTS + optional video/music) and **ElevenLabs** for voice to deliver:
+M.U.S.T.Learn is a full-stack learning platform that helps learners unify content from **Google Classroom**, **Notion**, **YouTube**, **Canvas**, or manual paste. The app uses **MiniMax** (LLM + TTS + video) and **ElevenLabs** for voice to deliver:
 
 - **Unified synthesis** — One coherent analysis from scattered materials  
 - **Knowledge gaps** — What’s missing or unclear  
