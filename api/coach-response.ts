@@ -121,6 +121,9 @@ export default async function handler(
   const debateMotion = typeof body.debateMotion === "string" ? body.debateMotion.trim() : undefined;
   const debateSide = body.debateSide === "against" || body.debateSide === "for" ? body.debateSide : undefined;
 
+  // eslint-disable-next-line no-console
+  console.log("[coach-response] POST", { messageIndex, mode, historyLen: conversationHistory.length });
+
   const specText = loadSpec();
   const systemPrompt = buildSystemPrompt(
     mode,
