@@ -32,6 +32,7 @@ import searchYoutubeHandler from './api/search-youtube'
 import chatMessagesHandler from './api/chat-messages'
 import youtubeAuthHandler from './api/youtube-auth'
 import youtubeCallbackHandler from './api/youtube-callback'
+import youtubeWatchHistoryHandler from './api/youtube-watch-history'
 
 function readBody(nodeReq: Connect.IncomingMessage): Promise<Record<string, unknown> | null> {
   return new Promise((resolve, reject) => {
@@ -81,6 +82,7 @@ const API_HANDLERS: Record<string, (req: Connect.IncomingMessage, res: Connect.S
   '/api/chat-messages': runVercelHandlerWithBody(chatMessagesHandler),
   '/api/youtube-auth': runVercelHandlerWithQuery(youtubeAuthHandler),
   '/api/youtube-callback': runVercelHandlerWithQuery(youtubeCallbackHandler),
+  '/api/youtube-watch-history': runVercelHandlerWithBody(youtubeWatchHistoryHandler),
 }
 
 type VercelReq = {

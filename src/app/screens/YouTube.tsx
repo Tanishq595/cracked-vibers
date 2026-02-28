@@ -9,6 +9,8 @@ import {
   AlertCircle,
   Link2,
   Search as SearchIcon,
+  History,
+  Trash2,
 } from 'lucide-react';
 import { AIChatAssistant } from '../components/AIChatAssistant';
 
@@ -33,6 +35,14 @@ type YouTubeData = {
   error?: string;
 };
 
+type WatchHistoryItem = {
+  id: string;
+  video_id: string;
+  video_url: string | null;
+  title: string | null;
+  watched_at: string;
+};
+
 export function YouTube() {
   const { getToken } = useAuth();
   const [data, setData] = useState<YouTubeData | null>(null);
@@ -41,6 +51,26 @@ export function YouTube() {
   const [searchResults, setSearchResults] = useState<YouTubeSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
+  const [watchHistory, setWatchHistory] = useState<WatchHistoryItem[]>([]);
+  const [watchHistoryLoading, setWatchHistoryLoading] = useState(false);
+  const [clearHistoryLoading, setClearHistoryLoading] = useState(false);
+
+  const loadWatchHistory = useCallback(async () => {
+    const token = await getToken();
+    if (!token) return;
+    setWatchHistoryLoading(true);
+    try {
+      const res = await fetch('/api/youtube-watch-history', {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const body = await res.json();
+      setWatchHistory(Array.isArray(body?.history) ? body.history : []);
+    } finally {
+      setWatchHistoryLoading(false);
+    }
+  }, [getToken]);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,6 +107,10 @@ export function YouTube() {
       cancelled = true;
     };
   }, [getToken]);
+
+  useEffect(() => {
+    loadWatchHistory();
+  }, [loadWatchHistory]);
 
   const runSearch = useCallback(async () => {
     const q = searchQuery.trim();
@@ -202,6 +236,105 @@ export function YouTube() {
         </motion.div>
       )}
 
+      {/* Watch history - always visible so user knows where it is */}
+      {!loading && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl border-2 border-slate-200 bg-white p-4 shadow-sm"
+        >
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2">
+              <History className="w-5 h-5 text-slate-600" />
+              <h2 className="text-lg font-bold text-slate-900">Recently watched</h2>
+            </div>
+            {watchHistory.length > 0 && (
+              <button
+                type="button"
+                onClick={async () => {
+                  const token = await getToken();
+                  if (!token) return;
+                  setClearHistoryLoading(true);
+                  try {
+                    const res = await fetch('/api/youtube-watch-history', {
+                      method: 'DELETE',
+                      headers: { Authorization: `Bearer ${token}` },
+                    });
+                    if (res.ok) {
+                      setWatchHistory([]);
+                    }
+                  } finally {
+                    setClearHistoryLoading(false);
+                  }
+                }}
+                disabled={clearHistoryLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:text-red-600 hover:bg-red-50 border border-slate-200 hover:border-red-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {clearHistoryLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Trash2 className="w-4 h-4" />
+                )}
+                Clear history
+              </button>
+            )}
+          </div>
+          {watchHistoryLoading ? (
+            <p className="text-sm text-slate-500 flex items-center gap-2 py-4">
+              <Loader2 className="w-4 h-4 animate-spin" /> Loading…
+            </p>
+          ) : watchHistory.length === 0 ? (
+            <div className="py-6 text-center rounded-xl bg-slate-50 border border-slate-100">
+              <History className="w-10 h-10 text-slate-400 mx-auto mb-2" />
+              <p className="text-slate-600 font-medium">No videos watched yet</p>
+              <p className="text-slate-500 text-sm mt-1">Search above and play a video in the player to see it here.</p>
+            </div>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {watchHistory.map((item) => (
+                <motion.div
+                  key={item.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setPlayingVideoId(item.video_id)}
+                  onKeyDown={(e) => e.key === 'Enter' && setPlayingVideoId(item.video_id)}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex gap-3 p-3 rounded-xl border border-slate-200 hover:border-red-200 hover:bg-red-50/30 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500/50"
+                >
+                  <img
+                    src={`https://img.youtube.com/vi/${item.video_id}/mqdefault.jpg`}
+                    alt=""
+                    className="w-24 h-16 rounded-lg object-cover shrink-0"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-slate-900 line-clamp-2 text-sm">{item.title || 'Video'}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {new Date(item.watched_at).toLocaleDateString(undefined, {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </p>
+                  </div>
+                  <a
+                    href={item.video_url || `https://www.youtube.com/watch?v=${item.video_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-slate-400 hover:text-red-600 shrink-0 mt-1 p-1"
+                    title="Open on YouTube"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </motion.div>
+      )}
+
       {/* Search YouTube - when connected */}
       {connected && (
         <motion.div
@@ -256,8 +389,30 @@ export function YouTube() {
                       animate={{ opacity: 1, y: 0 }}
                       role="button"
                       tabIndex={0}
-                      onClick={() => id && setPlayingVideoId(id)}
-                      onKeyDown={(e) => e.key === 'Enter' && id && setPlayingVideoId(id)}
+                      onClick={() => {
+                        if (!id) return;
+                        setPlayingVideoId(id);
+                        getToken().then((token) => {
+                          if (!token) return;
+                          fetch('/api/youtube-watch-history', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                            body: JSON.stringify({ video_id: id, video_url: video.url, title: video.title }),
+                          }).then(() => loadWatchHistory()).catch(() => {});
+                        });
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter' || !id) return;
+                        setPlayingVideoId(id);
+                        getToken().then((token) => {
+                          if (!token) return;
+                          fetch('/api/youtube-watch-history', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                            body: JSON.stringify({ video_id: id, video_url: video.url, title: video.title }),
+                          }).then(() => loadWatchHistory()).catch(() => {});
+                        });
+                      }}
                       className="flex gap-3 p-3 rounded-xl border border-slate-200 hover:border-red-300 hover:bg-red-50/50 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500/50"
                     >
                       {video.thumbnailUrl && (
