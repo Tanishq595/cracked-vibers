@@ -200,7 +200,7 @@ export function SpeakingCoachScreen() {
                 Timer
               </span>
 
-              <div className="w-full min-w-0">
+              <div className="mt-4 w-full min-w-0">
                 <div className="flex flex-wrap items-center justify-center gap-1 rounded-full bg-background/80 p-1 shadow-sm">
                   <button
                     type="button"
