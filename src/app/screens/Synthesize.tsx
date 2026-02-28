@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useUser } from "@clerk/clerk-react";
 import ReactMarkdown from "react-markdown";
+import { useLocation } from "react-router";
 import {
   Card,
   CardContent,
@@ -12,6 +13,14 @@ import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
 import { cn } from "../components/ui/utils";
 import { KnowledgeGraph } from "../components/KnowledgeGraph";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "../components/ui/dialog";
+import { FileText, Loader2 } from "lucide-react";
 
 const PLACEHOLDER = `Paste learning materials here (e.g. notes, transcript, textbook excerpt)...
 
@@ -89,12 +98,36 @@ export function Synthesize() {
   >([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const location = useLocation() as {
+    state?: { materialsFromLibrary?: string } | null;
+  };
+
+  type LibraryItem = {
+    key: string;
+    size: number;
+    lastModified: string | null;
+  };
+
+  const [libraryItems, setLibraryItems] = useState<LibraryItem[]>([]);
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [libraryError, setLibraryError] = useState<string | null>(null);
+  const [librarySelectedKeys, setLibrarySelectedKeys] = useState<string[]>([]);
+  const [libraryAdding, setLibraryAdding] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
     void loadHistory(user.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
+
+  useEffect(() => {
+    const fromLibrary = location.state?.materialsFromLibrary;
+    if (fromLibrary && !materials.trim()) {
+      setMaterials(fromLibrary);
+    }
+    // We deliberately don't clear location.state here; react-router v7 keeps it per navigation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
 
   async function handleSynthesize() {
     setError(null);
@@ -204,6 +237,88 @@ export function Synthesize() {
     }
   }
 
+  async function loadLibrary() {
+    if (!user?.id) {
+      setLibraryError("Sign in to access your library.");
+      return;
+    }
+    setLibraryError(null);
+    setLibraryLoading(true);
+    try {
+      const prefix = `uploads/${user.id}`;
+      const res = await fetch("/api/storage-list", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prefix }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to load files");
+
+      const items: LibraryItem[] = Array.isArray(data.items) ? data.items : [];
+      items.sort((a, b) => {
+        const da = a.lastModified ? Date.parse(a.lastModified) : 0;
+        const db = b.lastModified ? Date.parse(b.lastModified) : 0;
+        return db - da;
+      });
+      setLibraryItems(items);
+      setLibrarySelectedKeys((prev) =>
+        prev.filter((k) => items.some((it) => it.key === k))
+      );
+    } catch (e) {
+      setLibraryError(
+        e instanceof Error ? e.message : "Failed to load library files"
+      );
+    } finally {
+      setLibraryLoading(false);
+    }
+  }
+
+  function toggleLibrarySelected(key: string) {
+    setLibrarySelectedKeys((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+  }
+
+  async function importFromLibrary() {
+    if (!librarySelectedKeys.length) return;
+    setLibraryAdding(true);
+    try {
+      const selected = libraryItems.filter((it) =>
+        librarySelectedKeys.includes(it.key)
+      );
+      const parts: string[] = [];
+      for (const item of selected) {
+        const name = item.key.split("/").pop() || item.key;
+        const res = await fetch("/api/storage-download-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ objectKey: item.key }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.url) continue;
+        const fileRes = await fetch(data.url as string);
+        const text = await fileRes.text();
+        if (text && text.trim().length > 0) {
+          parts.push(`# Source: ${name}\n\n${text}`);
+        }
+      }
+      const combined = parts.join("\n\n---\n\n");
+      if (!combined.trim()) {
+        setLibraryError("Could not read selected files as text.");
+        return;
+      }
+      setMaterials((prev) =>
+        prev.trim().length ? `${prev.trim()}\n\n---\n\n${combined}` : combined
+      );
+    } catch (e) {
+      setLibraryError(
+        e instanceof Error ? e.message : "Failed to import from library"
+      );
+    } finally {
+      setLibraryAdding(false);
+    }
+  }
+
   async function startPractice() {
     if (!synthesis || !topics.length) return;
     setPracticeError(null);
@@ -304,10 +419,94 @@ export function Synthesize() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Learning materials</CardTitle>
-          <CardDescription>
-            Combined text from Classroom, Notion, YouTube, or manual paste
-          </CardDescription>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <CardTitle>Learning materials</CardTitle>
+              <CardDescription>
+                Combined text from Classroom, Notion, YouTube, or manual paste
+              </CardDescription>
+            </div>
+            <Dialog>
+              <DialogTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => void loadLibrary()}
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm hover:border-[#ffb347] hover:bg-[#ffb347]/5"
+                >
+                  <FileText className="w-4 h-4" />
+                  Import from Library
+                </button>
+              </DialogTrigger>
+              <DialogContent className="max-w-3xl">
+                <DialogHeader>
+                  <DialogTitle>Select files to import</DialogTitle>
+                </DialogHeader>
+                <div className="mt-2 space-y-3">
+                  {libraryError && (
+                    <p className="text-xs text-red-600">{libraryError}</p>
+                  )}
+                  {libraryLoading && (
+                    <p className="flex items-center gap-2 text-xs text-zinc-500">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Loading files…
+                    </p>
+                  )}
+                  {!libraryLoading && libraryItems.length === 0 && !libraryError && (
+                    <p className="text-xs text-zinc-500">
+                      No files in your library yet. Upload from the Library page
+                      first.
+                    </p>
+                  )}
+                  {!libraryLoading && libraryItems.length > 0 && (
+                    <ul className="max-h-64 space-y-2 overflow-auto text-sm">
+                      {libraryItems.map((item) => {
+                        const name = item.key.split("/").pop() || item.key;
+                        const last =
+                          item.lastModified &&
+                          !Number.isNaN(Date.parse(item.lastModified))
+                            ? new Date(item.lastModified).toLocaleString()
+                            : "Unknown";
+                        return (
+                          <li
+                            key={item.key}
+                            className="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 hover:border-[#ffb347] hover:bg-[#ffb347]/5 dark:border-slate-700"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={librarySelectedKeys.includes(item.key)}
+                              onChange={() => toggleLibrarySelected(item.key)}
+                              className="h-4 w-4 rounded border-slate-300 text-[#ffb347] focus:ring-[#ffb347]"
+                            />
+                            <FileText className="w-4 h-4 text-slate-500" />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate font-medium text-foreground">
+                                {name}
+                              </p>
+                              <p className="truncate text-[11px] text-zinc-500">
+                                {last}
+                              </p>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={importFromLibrary}
+                      disabled={
+                        !librarySelectedKeys.length || libraryAdding || libraryLoading
+                      }
+                    >
+                      {libraryAdding ? "Adding…" : "Add selected to editor"}
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <Textarea

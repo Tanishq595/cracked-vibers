@@ -11,6 +11,7 @@ import healthHandler from './api/health'
 import storageUploadUrlHandler from './api/storage-upload-url'
 import storageDeleteHandler from './api/storage-delete'
 import storageListHandler from './api/storage-list'
+import storageDownloadUrlHandler from './api/storage-download-url'
 import chatHandler from './api/chat'
 import synthesizeHandler from './api/synthesize'
 import narrateHandler from './api/narrate'
@@ -50,6 +51,7 @@ const API_HANDLERS: Record<string, (req: Connect.IncomingMessage, res: Connect.S
   '/api/storage-upload-url': runVercelHandlerWithBody(storageUploadUrlHandler),
   '/api/storage-delete': runVercelHandlerWithBody(storageDeleteHandler),
   '/api/storage-list': runVercelHandlerWithBody(storageListHandler),
+  '/api/storage-download-url': runVercelHandlerWithBody(storageDownloadUrlHandler),
   '/api/chat': runVercelHandlerWithBody(chatHandler),
   '/api/synthesize': runVercelHandlerWithBody(synthesizeHandler),
   '/api/narrate': runVercelHandlerWithBody(narrateHandler),
