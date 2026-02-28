@@ -93,10 +93,10 @@ export function Landing() {
             </button>
             <button
               type="button"
-              onClick={() => scrollToSection('cta')}
+              onClick={() => scrollToSection('footer')}
               className="text-slate-600 hover:text-slate-900 font-medium transition-colors"
             >
-              Get started
+              Footer
             </button>
           </nav>
           <Link
@@ -286,29 +286,109 @@ export function Landing() {
           </motion.ul>
         </section>
 
-        {/* Final CTA */}
-        <section id="cta" className="w-full max-w-2xl mx-auto text-center scroll-mt-20">
+        {/* Footer */}
+        <footer id="footer" className="w-full max-w-6xl mx-auto scroll-mt-20">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             className="p-8 md:p-12 rounded-3xl bg-white/90 backdrop-blur-sm border border-slate-200/60 shadow-lg"
           >
-            <h2 className="text-xl md:text-2xl font-bold text-slate-800 mb-4">
-              Ready to get started?
-            </h2>
-            <p className="text-slate-600 mb-6">
-              Sign up free and experience AI-powered learning today.
-            </p>
-            <Link
-              to="/login"
-              className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-[#ffb347] to-[#ff8c42] px-8 py-4 text-lg font-bold text-white shadow-lg shadow-orange-200/50 transition-all hover:shadow-xl hover:shadow-orange-300/50 hover:scale-105 active:scale-100"
-            >
-              Try now
-              <ArrowRight className="w-5 h-5" />
-            </Link>
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-10">
+              <div className="space-y-4 max-w-sm">
+                <img
+                  src="/company_logo/logo.png"
+                  alt="M.U.S.T.Learn"
+                  className="h-10 w-auto object-contain cursor-pointer"
+                  onClick={() => scrollToSection('hero')}
+                />
+                <p className="text-slate-600">
+                  AI-powered learning: synthesize materials, find gaps, and get a study plan.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-10">
+                <div className="space-y-3">
+                  <div className="text-sm font-bold text-slate-800">Product</div>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={() => scrollToSection('features')}
+                      className="text-left text-sm text-slate-600 hover:text-slate-900 transition-colors"
+                    >
+                      Features
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => scrollToSection('how-it-works')}
+                      className="text-left text-sm text-slate-600 hover:text-slate-900 transition-colors"
+                    >
+                      How it works
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => scrollToSection('why-choose')}
+                      className="text-left text-sm text-slate-600 hover:text-slate-900 transition-colors"
+                    >
+                      Why choose us
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="text-sm font-bold text-slate-800">Account</div>
+                  <div className="flex flex-col gap-2">
+                    <Link
+                      to="/login"
+                      className="text-sm text-slate-600 hover:text-slate-900 transition-colors"
+                    >
+                      Login
+                    </Link>
+                    <Link
+                      to="/signup"
+                      className="text-sm text-slate-600 hover:text-slate-900 transition-colors"
+                    >
+                      Sign up
+                    </Link>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="text-sm font-bold text-slate-800">Get in touch</div>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={() => scrollToSection('hero')}
+                      className="text-left text-sm text-slate-600 hover:text-slate-900 transition-colors"
+                    >
+                      Back to top
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-10 pt-6 border-t border-slate-200/60 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div className="text-sm text-slate-500">
+                © {new Date().getFullYear()} M.U.S.T.Learn. All rights reserved.
+              </div>
+              <div className="flex items-center gap-4">
+                <Link
+                  to="/login"
+                  className="text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors"
+                >
+                  Try now
+                </Link>
+                <Link
+                  to="/signup"
+                  className="text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors"
+                >
+                  Create account
+                </Link>
+              </div>
+            </div>
           </motion.div>
-        </section>
+        </footer>
         </div>
       </div>
     </div>
