@@ -10,6 +10,7 @@ import {
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
 import { cn } from "../components/ui/utils";
+import { AIChatAssistant } from "../components/AIChatAssistant";
 
 const PLACEHOLDER = `Paste learning materials here (e.g. notes, transcript, textbook excerpt)...
 
@@ -77,7 +78,9 @@ export function Synthesize() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-8 py-8">
+    <>
+      <AIChatAssistant />
+      <div className="mx-auto max-w-4xl space-y-8 py-8">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
           M.U.S.T.Learn
@@ -182,6 +185,7 @@ export function Synthesize() {
           )}
         </>
       )}
-    </div>
+      </div>
+    </>
   );
 }

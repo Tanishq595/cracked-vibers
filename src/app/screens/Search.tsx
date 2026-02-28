@@ -10,6 +10,7 @@ import {
   ExternalLink,
   TrendingUp
 } from 'lucide-react';
+import { AIChatAssistant } from '../components/AIChatAssistant';
 
 const suggestions = [
   'cellular respiration',
@@ -98,7 +99,9 @@ export function Search() {
   };
 
   return (
-    <div className="max-w-[1200px] mx-auto">
+    <>
+      <AIChatAssistant />
+      <div className="max-w-[1200px] mx-auto">
       {/* Search Header */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -278,6 +281,7 @@ export function Search() {
           </p>
         </motion.div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
