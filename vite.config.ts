@@ -39,6 +39,9 @@ import streakGetHandler from './api/streak-get'
 import insightsHandler from './api/insights'
 import cardReviewHandler from './api/card-review'
 import cardReviewDueHandler from './api/card-review-due'
+import knowledgeGraphHandler from './api/knowledge-graph'
+import knowledgeGraphMergeHandler from './api/knowledge-graph-merge'
+import knowledgeGraphBackfillHandler from './api/knowledge-graph-backfill'
 
 function readBody(nodeReq: Connect.IncomingMessage): Promise<Record<string, unknown> | null> {
   return new Promise((resolve, reject) => {
@@ -95,6 +98,9 @@ const API_HANDLERS: Record<string, (req: Connect.IncomingMessage, res: Connect.S
   '/api/insights': runVercelHandlerWithBody(insightsHandler),
   '/api/card-review': runVercelHandlerWithBody(cardReviewHandler),
   '/api/card-review-due': runVercelHandlerWithBody(cardReviewDueHandler),
+  '/api/knowledge-graph': runVercelHandlerWithBody(knowledgeGraphHandler),
+  '/api/knowledge-graph-merge': runVercelHandlerWithBody(knowledgeGraphMergeHandler),
+  '/api/knowledge-graph-backfill': runVercelHandlerWithBody(knowledgeGraphBackfillHandler),
 }
 
 type VercelReq = {

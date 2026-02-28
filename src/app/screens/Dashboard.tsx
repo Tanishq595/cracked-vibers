@@ -21,11 +21,11 @@ import {
   Send,
   Trophy,
 } from "lucide-react";
-import { useState, useEffect, Component, useCallback, type ReactNode } from "react";
+import { useState, useEffect, useRef, Component, useCallback, type ReactNode } from "react";
 import { useAuth, useUser } from "@clerk/clerk-react";
 import { KnowledgeGraph } from "../components/KnowledgeGraph";
 import { ChatbotGLB } from "../components/ChatbotGLB";
-import { useNavigate } from "react-router";
+import { useNavigate, Link } from "react-router";
 import { useTopGaps } from "./GapAnalysis";
 
 const CHAT_HISTORY_KEY = "mustlearn_chat_history_";
@@ -189,6 +189,69 @@ export function Dashboard() {
   const [insightsLoading, setInsightsLoading] = useState(true);
   const [insightsError, setInsightsError] = useState(false);
   const [hasSyntheses, setHasSyntheses] = useState<boolean | null>(null);
+
+  const [graphData, setGraphData] = useState<{ nodes: Array<{ id: string; label: string }>; edges: Array<{ from: string; to: string; type?: string }> } | null>(null);
+  const [graphLoading, setGraphLoading] = useState(true);
+  const graphBackfillTriggered = useRef(false);
+
+  const fetchGraph = useCallback((): Promise<{ nodes: Array<{ id: string; label: string }>; edges: Array<{ from: string; to: string; type?: string }> }> => {
+    if (!userId) return Promise.resolve({ nodes: [], edges: [] });
+    return fetch('/api/knowledge-graph', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        const nodes = Array.isArray(d?.nodes) ? d.nodes : [];
+        const edges = Array.isArray(d?.edges) ? d.edges : [];
+        return { nodes, edges };
+      });
+  }, [userId]);
+
+  useEffect(() => {
+    if (!userId) {
+      setGraphData(null);
+      setGraphLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setGraphLoading(true);
+    fetchGraph()
+      .then((payload) => {
+        if (cancelled) return;
+        setGraphData(payload);
+        if (payload.nodes.length === 0 && !graphBackfillTriggered.current) {
+          graphBackfillTriggered.current = true;
+          if (!cancelled) setGraphLoading(true);
+          fetch('/api/knowledge-graph-backfill', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId }),
+          })
+            .then((r) => r.json())
+            .then((backfill) => {
+              if (cancelled) return;
+              if (backfill?.ok && backfill?.merged > 0) {
+                return fetchGraph().then((p) => {
+                  if (!cancelled) setGraphData(p);
+                });
+              }
+            })
+            .catch(() => {})
+            .finally(() => {
+              if (!cancelled) setGraphLoading(false);
+            });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setGraphData(null);
+      })
+      .finally(() => {
+        if (!cancelled) setGraphLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [userId, fetchGraph]);
 
   useEffect(() => {
     if (!userId) {
@@ -754,16 +817,26 @@ export function Dashboard() {
               </div>
               <h2 className="text-2xl font-bold text-foreground">Knowledge Graph</h2>
             </div>
-            <motion.button
-              whileHover={{ x: 4 }}
+            <Link
+              to="/dashboard/knowledge-graph"
               className="text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-semibold transition-colors"
             >
               Explore
               <ChevronRight className="w-4 h-4" />
-            </motion.button>
+            </Link>
           </div>
 
-          <KnowledgeGraph />
+          {graphLoading ? (
+            <div className="h-[420px] flex items-center justify-center text-muted-foreground">Loading graph…</div>
+          ) : graphData && graphData.nodes.length > 0 ? (
+            <div className="h-[420px] w-full">
+              <KnowledgeGraph data={graphData} />
+            </div>
+          ) : (
+            <div className="h-[420px] flex items-center justify-center text-muted-foreground rounded-xl bg-muted/30 border border-dashed border-border">
+              Create a synthesis to build your knowledge graph.
+            </div>
+          )}
         </motion.div>
 
       {/* Quick Stats + Gaps Preview */}

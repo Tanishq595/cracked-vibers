@@ -27,24 +27,25 @@ export function KnowledgeGraph({ data }: KnowledgeGraphProps = {}) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const simulationRef = useRef<d3.Simulation<GraphNode, GraphLink> | null>(null);
-  const [dimensions, setDimensions] = useState({ width: 800, height: 420 });
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
-    // Update dimensions based on container
+    const el = containerRef.current;
+    if (!el) return;
+
     const updateDimensions = () => {
-      if (containerRef.current) {
-        const { width, height } = containerRef.current.getBoundingClientRect();
-        setDimensions({ width, height });
-      }
+      const { width, height } = el.getBoundingClientRect();
+      if (width > 0 && height > 0) setDimensions({ width, height });
     };
 
     updateDimensions();
-    window.addEventListener('resize', updateDimensions);
-    return () => window.removeEventListener('resize', updateDimensions);
+    const ro = new ResizeObserver(updateDimensions);
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
   useEffect(() => {
-    if (!svgRef.current) return;
+    if (!svgRef.current || dimensions.width <= 0 || dimensions.height <= 0) return;
 
     const { width, height } = dimensions;
 
@@ -150,7 +151,7 @@ export function KnowledgeGraph({ data }: KnowledgeGraphProps = {}) {
       .attr('offset', '100%')
       .attr('stop-color', '#06B6D4');
 
-    // Create force simulation
+    // Create force simulation - tuned so the graph fills the container
     const simulation = d3
       .forceSimulation(nodes)
       .force(
@@ -158,14 +159,14 @@ export function KnowledgeGraph({ data }: KnowledgeGraphProps = {}) {
         d3
           .forceLink<GraphNode, GraphLink>(links)
           .id((d) => d.id)
-          .distance(80)
-          .strength(0.3)
+          .distance(60)
+          .strength(0.4)
       )
-      .force('charge', d3.forceManyBody().strength(-250))
+      .force('charge', d3.forceManyBody().strength(-280))
       .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide<GraphNode>().radius((d) => d.radius + 35))
-      .force('x', d3.forceX(width / 2).strength(0.03))
-      .force('y', d3.forceY(height / 2).strength(0.03));
+      .force('collision', d3.forceCollide<GraphNode>().radius((d) => d.radius + 12))
+      .force('x', d3.forceX(width / 2).strength(0.012))
+      .force('y', d3.forceY(height / 2).strength(0.012));
 
     simulationRef.current = simulation;
 
@@ -190,11 +191,12 @@ export function KnowledgeGraph({ data }: KnowledgeGraphProps = {}) {
       .attr('class', 'node-group')
       .style('cursor', 'pointer')
       .call(
-        d3.drag<SVGGElement, GraphNode>()
+        d3
+          .drag<SVGGElement, GraphNode>()
           .on('start', (event, d) => {
             if (!event.active) simulation.alphaTarget(0.3).restart();
-            d.fx = d.x;
-            d.fy = d.y;
+            d.fx = d.x ?? null;
+            d.fy = d.y ?? null;
           })
           .on('drag', (event, d) => {
             d.fx = event.x;
@@ -204,7 +206,7 @@ export function KnowledgeGraph({ data }: KnowledgeGraphProps = {}) {
             if (!event.active) simulation.alphaTarget(0);
             d.fx = null;
             d.fy = null;
-          })
+          }) as any
       );
 
     // Add circles to nodes
@@ -215,18 +217,18 @@ export function KnowledgeGraph({ data }: KnowledgeGraphProps = {}) {
       .attr('stroke', '#06B6D4')
       .attr('stroke-width', 2)
       .style('filter', 'drop-shadow(0 4px 8px rgba(99, 102, 241, 0.3))')
-      .on('mouseenter', function() {
-        d3.select(this)
+      .on('mouseenter', function (this: SVGCircleElement) {
+        d3.select<SVGCircleElement, GraphNode>(this)
           .transition()
           .duration(200)
-          .attr('r', (d) => d.radius * 1.2)
+          .attr('r', (d: GraphNode) => d.radius * 1.2)
           .attr('stroke-width', 3);
       })
-      .on('mouseleave', function() {
-        d3.select(this)
+      .on('mouseleave', function (this: SVGCircleElement) {
+        d3.select<SVGCircleElement, GraphNode>(this)
           .transition()
           .duration(200)
-          .attr('r', (d) => d.radius)
+          .attr('r', (d: GraphNode) => d.radius)
           .attr('stroke-width', 2);
       });
 
@@ -252,8 +254,20 @@ export function KnowledgeGraph({ data }: KnowledgeGraphProps = {}) {
       .style('pointer-events', 'none')
       .text((d) => d.label);
 
-    // Update positions on tick
+    // Keep nodes within bounds (full container with padding for labels)
+    const padding = { top: 20, right: 20, bottom: 44, left: 20 };
+    const xMin = padding.left;
+    const xMax = width - padding.right;
+    const yMin = padding.top;
+    const yMax = height - padding.bottom;
+
     simulation.on('tick', () => {
+      nodes.forEach((d) => {
+        if (d.fx == null && d.fy == null) {
+          d.x = Math.max(xMin, Math.min(xMax, d.x ?? width / 2));
+          d.y = Math.max(yMin, Math.min(yMax, d.y ?? height / 2));
+        }
+      });
       link
         .attr('x1', (d) => (d.source as GraphNode).x!)
         .attr('y1', (d) => (d.source as GraphNode).y!)
@@ -267,11 +281,15 @@ export function KnowledgeGraph({ data }: KnowledgeGraphProps = {}) {
     return () => {
       simulation.stop();
     };
-  }, [dimensions]);
+  }, [dimensions, data]);
 
   return (
-    <div ref={containerRef} className="relative h-[420px] w-full bg-gradient-to-br from-indigo-50 to-cyan-50 rounded-xl overflow-hidden border border-slate-200">
-      <svg ref={svgRef} className="w-full h-full" />
+    <div ref={containerRef} className="relative w-full h-full min-h-[420px] bg-gradient-to-br from-indigo-50 to-cyan-50 rounded-xl overflow-hidden border border-slate-200 flex flex-col">
+      <svg
+        ref={svgRef}
+        className="flex-1 min-h-0 w-full block"
+        style={{ width: '100%', height: '100%', display: 'block' }}
+      />
       
       {/* Zoom hint */}
       <div className="absolute bottom-4 right-4 px-3 py-2 bg-slate-900/80 backdrop-blur-sm rounded-lg border border-cyan-500/30">

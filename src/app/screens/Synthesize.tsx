@@ -405,6 +405,14 @@ export function Synthesize() {
       });
       setTopics(extractedTopics);
 
+      if (user?.id && synthesisIdFromApi) {
+        fetch("/api/knowledge-graph-merge", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: user.id, synthesisId: synthesisIdFromApi }),
+        }).catch(() => {});
+      }
+
       const studyPlanText = extractStudyPlanSection(data.markdown ?? "");
       if (studyPlanText) {
         setNarrateLoading(true);
