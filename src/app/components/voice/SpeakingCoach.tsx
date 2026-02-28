@@ -357,11 +357,20 @@ export function SpeakingCoach({
                 setSessionSummary(assessmentSummary);
               }
             } else {
+              const errText = await res.text();
+              let errMessage: string | null = null;
+              try {
+                const parsed = JSON.parse(errText) as { error?: string };
+                if (typeof parsed.error === "string") errMessage = parsed.error;
+              } catch {
+                // ignore
+              }
               console.error(
                 "Failed to complete speaking session:",
                 res.status,
-                await res.text(),
+                errText,
               );
+              if (errMessage) setError(errMessage);
             }
           } catch (e) {
             console.error("Error while completing speaking session:", e);

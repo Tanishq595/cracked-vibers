@@ -41,6 +41,7 @@ import googleClassroomAuthCallbackHandler from './api/google-classroom-auth-call
 import googleClassroomDataHandler from './api/google-classroom-data'
 import speakingAssessmentsListHandler from './api/speaking-assessments-list'
 import speakingAssessmentDetailHandler from './api/speaking-assessment-detail'
+import speakingSessionCompleteHandler from './api/speaking-session-complete'
 
 function readBody(nodeReq: Connect.IncomingMessage): Promise<Record<string, unknown> | null> {
   return new Promise((resolve, reject) => {
@@ -107,6 +108,7 @@ const API_HANDLERS: Record<string, (req: Connect.IncomingMessage, res: Connect.S
   '/api/google-classroom-data': runVercelHandlerGet(googleClassroomDataHandler),
   '/api/speaking-assessments-list': runVercelHandlerGet(speakingAssessmentsListHandler),
   '/api/speaking-assessment-detail': runVercelHandlerGet(speakingAssessmentDetailHandler),
+  '/api/speaking-session-complete': runVercelHandlerWithBody(speakingSessionCompleteHandler),
 }
 
 type VercelReq = {

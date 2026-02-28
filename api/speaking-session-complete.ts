@@ -214,6 +214,17 @@ export default async function handler(
       appUserId = inserted.id as string;
     }
 
+    // speaking_sessions.user_id must be UUID; app_users.id must be UUID
+    const uuidLike = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(appUserId));
+    if (!uuidLike) {
+      // eslint-disable-next-line no-console
+      console.warn("[speaking-session-complete] app_users.id is not a UUID; session cannot be saved. Migrate app_users.id to UUID.");
+      res.status(400).json({
+        error: "Session could not be saved. Your account record uses an old format; assessments require a database update.",
+      });
+      return;
+    }
+
     const now = new Date();
     const started =
       typeof startedAt === "string" && startedAt
