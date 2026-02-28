@@ -131,6 +131,7 @@ export default async function handler(
     // Best-effort persistence: store synthesis for this user if configured.
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    let synthesisId: string | null = null;
     if (supabaseUrl && supabaseServiceKey && typeof userId === "string") {
       try {
         const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -139,14 +140,20 @@ export default async function handler(
             ? title.trim()
             : topics[0]?.label ?? "Untitled synthesis";
 
-        await supabase.from("user_syntheses").insert({
-          user_id: userId,
-          title: recordTitle,
-          materials,
-          markdown: result,
-          topics,
-          knowledge_graph: knowledgeGraph,
-        });
+        const { data: insertData, error: insertError } = await supabase
+          .from("user_syntheses")
+          .insert({
+            user_id: userId,
+            title: recordTitle,
+            materials,
+            markdown: result,
+            topics,
+            knowledge_graph: knowledgeGraph,
+          })
+          .select("id")
+          .single();
+
+        if (!insertError && insertData?.id) synthesisId = insertData.id as string;
       } catch (e) {
         // eslint-disable-next-line no-console
         console.error("[synthesize] failed to persist synthesis:", e);
@@ -158,6 +165,7 @@ export default async function handler(
       markdown: result,
       knowledgeGraph,
       topics,
+      synthesisId,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Synthesis failed.";

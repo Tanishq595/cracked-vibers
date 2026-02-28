@@ -32,6 +32,7 @@ import searchYoutubeHandler from './api/search-youtube'
 import chatMessagesHandler from './api/chat-messages'
 import youtubeAuthHandler from './api/youtube-auth'
 import youtubeCallbackHandler from './api/youtube-callback'
+import gapsAddressedHandler from './api/gaps-addressed'
 import youtubeWatchHistoryHandler from './api/youtube-watch-history'
 import canvasFetchHandler from './api/canvas-fetch'
 import canvasAuthUrlHandler from './api/canvas-auth-url'
@@ -42,6 +43,11 @@ import googleClassroomDataHandler from './api/google-classroom-data'
 import speakingAssessmentsListHandler from './api/speaking-assessments-list'
 import speakingAssessmentDetailHandler from './api/speaking-assessment-detail'
 import speakingSessionCompleteHandler from './api/speaking-session-complete'
+import streakRecordHandler from './api/streak-record'
+import streakGetHandler from './api/streak-get'
+import insightsHandler from './api/insights'
+import cardReviewHandler from './api/card-review'
+import cardReviewDueHandler from './api/card-review-due'
 
 function readBody(nodeReq: Connect.IncomingMessage): Promise<Record<string, unknown> | null> {
   return new Promise((resolve, reject) => {
@@ -99,6 +105,7 @@ const API_HANDLERS: Record<string, (req: Connect.IncomingMessage, res: Connect.S
   '/api/chat-messages': runVercelHandlerWithBody(chatMessagesHandler),
   '/api/youtube-auth': runVercelHandlerGet(youtubeAuthHandler),
   '/api/youtube-callback': runVercelHandlerGet(youtubeCallbackHandler),
+  '/api/gaps-addressed': runVercelHandlerWithBody(gapsAddressedHandler),
   '/api/youtube-watch-history': runVercelHandlerWithBody(youtubeWatchHistoryHandler),
   '/api/canvas/fetch': runVercelHandlerGet(canvasFetchHandler),
   '/api/canvas/auth-url': runVercelHandlerWithBody(canvasAuthUrlHandler),
@@ -109,6 +116,11 @@ const API_HANDLERS: Record<string, (req: Connect.IncomingMessage, res: Connect.S
   '/api/speaking-assessments-list': runVercelHandlerGet(speakingAssessmentsListHandler),
   '/api/speaking-assessment-detail': runVercelHandlerGet(speakingAssessmentDetailHandler),
   '/api/speaking-session-complete': runVercelHandlerWithBody(speakingSessionCompleteHandler),
+  '/api/streak-record': runVercelHandlerWithBody(streakRecordHandler),
+  '/api/streak-get': runVercelHandlerWithBody(streakGetHandler),
+  '/api/insights': runVercelHandlerWithBody(insightsHandler),
+  '/api/card-review': runVercelHandlerWithBody(cardReviewHandler),
+  '/api/card-review-due': runVercelHandlerWithBody(cardReviewDueHandler),
 }
 
 type VercelReq = {

@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useClerk, useUser } from '@clerk/clerk-react';
 const LOGO_SVG = '/company_logo/logo.png';
 const LOGO_PNG = '/company_logo/logo.png';
@@ -52,6 +52,65 @@ export function Layout() {
   const [logoError, setLogoError] = useState(false);
   const [logoSrc, setLogoSrc] = useState(LOGO_SVG);
   const showLogo = !logoError;
+
+  // Login streak: record today once per session, then fetch streak + dates
+  const [streakDays, setStreakDays] = useState<number | null>(null);
+  const [loginDates, setLoginDates] = useState<string[]>([]);
+  const [streakLoading, setStreakLoading] = useState(true);
+  const [streakError, setStreakError] = useState(false);
+  const [streakPopupOpen, setStreakPopupOpen] = useState(false);
+  const streakRecordedThisSession = useRef(false);
+
+  useEffect(() => {
+    const uid = user?.id;
+    if (!uid) {
+      setStreakLoading(false);
+      return;
+    }
+    let cancelled = false;
+
+    (async () => {
+      setStreakLoading(true);
+      setStreakError(false);
+      try {
+        if (!streakRecordedThisSession.current) {
+          await fetch('/api/streak-record', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: uid }),
+          });
+          streakRecordedThisSession.current = true;
+        }
+        const res = await fetch('/api/streak-get', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: uid }),
+        });
+        if (cancelled) return;
+        if (!res.ok) {
+          setStreakError(true);
+          setStreakDays(0);
+          setLoginDates([]);
+          return;
+        }
+        const data = (await res.json()) as { streakDays: number; loginDates: string[] };
+        setStreakDays(data.streakDays ?? 0);
+        setLoginDates(Array.isArray(data.loginDates) ? data.loginDates : []);
+      } catch {
+        if (!cancelled) {
+          setStreakError(true);
+          setStreakDays(0);
+          setLoginDates([]);
+        }
+      } finally {
+        if (!cancelled) setStreakLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
   const handleLogoError = () => {
     if (logoSrc === LOGO_SVG) {
       setLogoSrc(LOGO_PNG);
@@ -170,11 +229,17 @@ export function Layout() {
 
           {/* Right side - Profile with Streak */}
           <div className="flex items-center gap-4">
-            {/* Streak Badge */}
-            <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500/20 to-amber-500/20 rounded-xl border border-orange-500/30">
+            {/* Streak Badge - clickable, shows real streak */}
+            <button
+              type="button"
+              onClick={() => setStreakPopupOpen(true)}
+              className="hidden md:flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500/20 to-amber-500/20 rounded-xl border border-orange-500/30 hover:from-orange-500/30 hover:to-amber-500/30 transition-colors cursor-pointer"
+            >
               <Flame className="w-5 h-5 text-amber-400" />
-              <span className="font-bold text-foreground">12 days</span>
-            </div>
+              <span className="font-bold text-foreground">
+                {streakLoading ? '…' : streakError ? '—' : streakDays === 1 ? '1 day' : `${streakDays ?? 0} days`}
+              </span>
+            </button>
 
             {/* Profile Dropdown */}
             <div className="relative">
@@ -221,6 +286,60 @@ export function Layout() {
           <Outlet />
         </main>
       </div>
+
+      {/* Streak popup: timeline of login days */}
+      <AnimatePresence>
+        {streakPopupOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setStreakPopupOpen(false)}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100]"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md max-h-[80vh] bg-card rounded-2xl shadow-2xl border border-border z-[101] flex flex-col overflow-hidden"
+            >
+              <div className="flex items-center justify-between p-4 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <Flame className="w-6 h-6 text-amber-400" />
+                  <h2 className="text-lg font-bold text-foreground">Login streak</h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setStreakPopupOpen(false)}
+                  className="p-2 rounded-lg hover:bg-sidebar-accent text-muted-foreground"
+                  aria-label="Close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-4 overflow-y-auto flex-1">
+                <p className="text-sm text-muted-foreground mb-4">
+                  {streakLoading ? 'Loading…' : streakError ? 'Could not load streak.' : `You've logged in on ${loginDates.length} day${loginDates.length === 1 ? '' : 's'}. Current streak: ${streakDays ?? 0} day${(streakDays ?? 0) === 1 ? '' : 's'}.`}
+                </p>
+                {loginDates.length === 0 && !streakLoading && !streakError && (
+                  <p className="text-sm text-muted-foreground">No login days recorded yet.</p>
+                )}
+                {loginDates.length > 0 && (
+                  <ul className="space-y-2">
+                    {loginDates.map((d) => (
+                      <li key={d} className="flex items-center gap-2 text-sm">
+                        <span className="w-2 h-2 rounded-full bg-amber-400" />
+                        <span className="font-mono text-foreground">{d}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
