@@ -45,6 +45,8 @@ export function SpeakingCoach({
   const recognitionRef = useRef<{ start(): void; stop(): void } | null>(null);
   const userTranscriptRef = useRef("");
   const conversationTurnsRef = useRef<{ role: "user" | "coach"; text: string }[]>([]);
+  const sessionStartRef = useRef<Date | null>(null);
+  const lastRequestedTextRef = useRef<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
@@ -190,6 +192,8 @@ export function SpeakingCoach({
     coachMode,
     getCoachMessage,
     onConnect: () => {
+      sessionStartRef.current = new Date();
+      lastRequestedTextRef.current = null;
       setError(null);
       setSessionSummary(null);
       setIsStarting(false);
@@ -249,7 +253,10 @@ export function SpeakingCoach({
       return;
     }
     const t = setTimeout(() => {
-      if (!userTranscriptRef.current.trim()) return;
+      const latest = userTranscriptRef.current.trim();
+      if (!latest) return;
+      if (latest === lastRequestedTextRef.current) return;
+      lastRequestedTextRef.current = latest;
       conversation.requestCoachReply();
     }, 2000);
     return () => clearTimeout(t);
@@ -302,7 +309,24 @@ export function SpeakingCoach({
     setIsStopping(true);
     setError(null);
 
+    const endedAt = new Date();
+    const startedAt = sessionStartRef.current ?? endedAt;
+    const totalDurationSec = Math.max(
+      0,
+      Math.round((endedAt.getTime() - startedAt.getTime()) / 1000),
+    );
+
     try {
+      // Capture any final user speech that was never paired with a coach reply
+      const finalUserText = userTranscriptRef.current.trim();
+      const turnsToSave = [...conversationTurnsRef.current];
+      if (finalUserText) {
+        const lastTurn = turnsToSave[turnsToSave.length - 1];
+        if (!lastTurn || lastTurn.role !== "user" || lastTurn.text !== finalUserText) {
+          turnsToSave.push({ role: "user", text: finalUserText });
+        }
+      }
+
       await conversation.endSession();
       setConversationActive(false);
 
@@ -310,6 +334,47 @@ export function SpeakingCoach({
       if (videoRef.current) {
         videoRef.current.pause();
         videoRef.current.currentTime = 0;
+      }
+
+      // Save full session + assessment (scores/feedback) when possible
+      if (userId && turnsToSave.length > 0) {
+        try {
+          const res = await fetch("/api/speaking-session-complete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId,
+              topic: topicLabels[0] ?? null,
+              topics: topicLabels,
+              coachMode,
+              startedAt: startedAt.toISOString(),
+              endedAt: endedAt.toISOString(),
+              totalDurationSec,
+              sttProvider: "browser-speech-api",
+              transcriptLanguage: "en-US",
+              conversationTurns: turnsToSave,
+            }),
+          });
+
+          if (res.ok) {
+            const data = (await res.json()) as {
+              session?: unknown;
+              assessment?: { summary?: string } | null;
+            };
+            if (data.assessment?.summary) {
+              setSessionSummary(data.assessment.summary);
+            }
+          } else {
+            // eslint-disable-next-line no-console
+            console.error(
+              "Failed to complete speaking session:",
+              res.status,
+              await res.text(),
+            );
+          }
+        } catch (e) {
+          console.error("Error while completing speaking session:", e);
+        }
       }
 
       if (topicLabels.length > 0) {
@@ -325,7 +390,11 @@ export function SpeakingCoach({
           }
         }
         onSessionEnd?.(topicLabels);
-        setSessionSummary(`Session saved. Topics practiced: ${topicLabels.join(", ")}.`);
+        if (!sessionSummary) {
+          setSessionSummary(
+            `Session saved. Topics practiced: ${topicLabels.join(", ")}.`,
+          );
+        }
       }
     } catch (err) {
       console.error("Failed to stop conversation:", err);
@@ -334,7 +403,7 @@ export function SpeakingCoach({
     } finally {
       setIsStopping(false);
     }
-  }, [conversation, isStopping, topicLabels, userId, onSessionEnd]);
+  }, [coachMode, conversation, isStopping, onSessionEnd, topicLabels, userId, sessionSummary]);
 
   const forceStop = useCallback(() => {
     setConversationActive(false);

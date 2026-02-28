@@ -133,9 +133,10 @@ export const useConversation = ({
 
       nextCoachIndexRef.current = 0;
       const fallbackMessages = buildAgentMessages(coachContext, coachMode);
-      // First message (index 0) fires immediately so the coach welcomes first.
-      // Non-debate: only schedule this one; later messages when user speaks (requestCoachReply).
-      // Debate: intro 0, prep ~15s then "Time. Begin", 30s at 45s, time's up at 60s
+      // Debate: intro 0, prep ~15s then "Time. Begin", 30s at 45s, time's up at 60s.
+      // For explain mode we do NOT auto-schedule a welcome, so the first coach
+      // reply only happens after the user speaks (via requestCoachReply).
+      // For gaps/exam we still auto-schedule a short opening (index 0).
       const delays =
         coachMode === "debate"
           ? [0, 15000, 45000, 60000]
@@ -146,8 +147,15 @@ export const useConversation = ({
         onConnect?.();
 
         const timeouts: ReturnType<typeof setTimeout>[] = [];
-        const indicesToSchedule =
-          coachMode === "debate" ? [0, 1, 2, 3] : [0];
+        let indicesToSchedule: number[] = [];
+        if (coachMode === "debate") {
+          indicesToSchedule = [0, 1, 2, 3];
+        } else if (coachMode === "gaps" || coachMode === "exam") {
+          indicesToSchedule = [0];
+        } else {
+          // explain mode: wait until the learner speaks
+          indicesToSchedule = [];
+        }
         indicesToSchedule.forEach((i) => {
           const fallbackMsg = fallbackMessages[i] ?? "";
           const t = setTimeout(async () => {
