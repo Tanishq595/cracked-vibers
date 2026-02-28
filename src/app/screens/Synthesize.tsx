@@ -30,7 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
-import { FileText, Loader2, BookOpen, Layers, ChevronLeft, ChevronRight, Check, X } from "lucide-react";
+import { FileText, Loader2, BookOpen, Layers, ChevronLeft, ChevronRight, Check, X, Video } from "lucide-react";
 
 const STORAGE_KEY_PREFIX = "mustlearn_qsets_";
 
@@ -256,6 +256,11 @@ export function Synthesize() {
   const [flashcardIndex, setFlashcardIndex] = useState(0);
   const [flashcardFlipped, setFlashcardFlipped] = useState(false);
 
+  const [videoTaskId, setVideoTaskId] = useState<string | null>(null);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoLoading, setVideoLoading] = useState(false);
+  const [videoError, setVideoError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!user?.id) return;
     void loadHistory(user.id);
@@ -307,6 +312,9 @@ export function Synthesize() {
     setTopics([]);
     setAudioUrl(null);
     setCurrentSet(null);
+    setVideoUrl(null);
+    setVideoTaskId(null);
+    setVideoError(null);
     setSynthLoading(true);
     try {
       const res = await fetch("/api/synthesize", {
@@ -400,6 +408,110 @@ export function Synthesize() {
     saveSets(user.id, next);
   }
 
+  function buildVideoPromptFromSynthesis(): string {
+    if (!synthesis?.markdown) return "";
+    const baseMd = stripKnowledgeGraphSection(synthesis.markdown);
+    const topicsMd = extractSection(baseMd, "Topics");
+    const planMd = extractSection(baseMd, "Study Plan");
+    const topicLines = sectionLines(topicsMd);
+    const planLines = sectionLines(planMd);
+    const topicList = topicLines.slice(0, 8).join(", ");
+    const planList = planLines.slice(0, 5).join(". ");
+    const raw = `Educational explainer video. Topics: ${topicList}. Study plan: ${planList}. Clean, modern, professional style.`;
+    return raw.slice(0, 2000);
+  }
+
+  async function handleGenerateVideo() {
+    setVideoError(null);
+    setVideoUrl(null);
+    setVideoLoading(true);
+    try {
+      let markdown = synthesis?.markdown ?? "";
+      let extractedTopics = topics;
+
+      if (!markdown || extractedTopics.length === 0) {
+        const combined = await getCombinedMaterials();
+        if (!combined.trim()) {
+          setVideoError("Select at least one file from Library or paste materials.");
+          return;
+        }
+        const res = await fetch("/api/synthesize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            materials: combined,
+            userId: user?.id,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Synthesis failed");
+        markdown = data.markdown ?? "";
+        extractedTopics = Array.isArray(data.topics) ? data.topics : [];
+        setSynthesis({
+          markdown,
+          knowledgeGraph: data.knowledgeGraph ?? null,
+        });
+        setTopics(extractedTopics);
+      }
+
+      const baseMd = stripKnowledgeGraphSection(markdown);
+      const topicsMd = extractSection(baseMd, "Topics");
+      const planMd = extractSection(baseMd, "Study Plan");
+      const topicLines = sectionLines(topicsMd);
+      const planLines = sectionLines(planMd);
+      const topicList = topicLines.slice(0, 8).join(", ");
+      const planList = planLines.slice(0, 5).join(". ");
+      const prompt = `Educational explainer video. Topics: ${topicList}. Study plan: ${planList}. Clean, modern, professional style.`.slice(0, 2000);
+
+      if (!prompt.trim()) {
+        setVideoError("No synthesis content to turn into a video.");
+        return;
+      }
+
+      const createRes = await fetch("/api/video", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      });
+      const createData = (await createRes.json()) as { task_id?: string; error?: string };
+      if (!createRes.ok) {
+        throw new Error(createData.error ?? "Failed to start video generation");
+      }
+      const taskId = createData.task_id;
+      if (!taskId) {
+        throw new Error("No task ID returned");
+      }
+      setVideoTaskId(taskId);
+
+      const maxAttempts = 80;
+      const intervalMs = 3000;
+      for (let i = 0; i < maxAttempts; i++) {
+        const queryRes = await fetch(`/api/video?task_id=${encodeURIComponent(taskId)}`);
+        const queryData = (await queryRes.json()) as {
+          status?: string;
+          video_url?: string;
+          error?: string;
+        };
+        if (queryData.status === "success" && queryData.video_url) {
+          setVideoUrl(queryData.video_url);
+          setVideoTaskId(null);
+          return;
+        }
+        if (queryData.status === "fail") {
+          throw new Error(queryData.error ?? "Video generation failed");
+        }
+        await new Promise((r) => setTimeout(r, intervalMs));
+      }
+      throw new Error("Video generation timed out");
+    } catch (e) {
+      setVideoError(e instanceof Error ? e.message : "Failed to generate video");
+      setVideoUrl(null);
+      setVideoTaskId(null);
+    } finally {
+      setVideoLoading(false);
+    }
+  }
+
   async function loadHistory(userId: string) {
     setHistoryError(null);
     setHistoryLoading(true);
@@ -439,6 +551,9 @@ export function Synthesize() {
       });
       setTopics(Array.isArray(data.topics) ? data.topics : []);
       setAudioUrl(null);
+      setVideoUrl(null);
+      setVideoTaskId(null);
+      setVideoError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load synthesis");
     } finally {
@@ -609,20 +724,40 @@ export function Synthesize() {
               disabled={synthLoading}
             />
           </div>
-          <Button
-            onClick={() => void handleGenerateQuestionBank()}
-            disabled={synthLoading || (librarySelectedKeys.length === 0 && !materials.trim())}
-            className="w-full sm:w-auto"
-          >
-            {synthLoading ? (
-              <span className="flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Generating…
-              </span>
-            ) : (
-              "Generate question bank & flashcards"
-            )}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              onClick={() => void handleGenerateQuestionBank()}
+              disabled={synthLoading || videoLoading || (librarySelectedKeys.length === 0 && !materials.trim())}
+              className="w-full sm:w-auto"
+            >
+              {synthLoading ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Generating…
+                </span>
+              ) : (
+                "Generate question bank & flashcards"
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => void handleGenerateVideo()}
+              disabled={synthLoading || videoLoading || (librarySelectedKeys.length === 0 && !materials.trim())}
+              className="inline-flex items-center gap-2"
+            >
+              {videoLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Generating video…
+                </>
+              ) : (
+                <>
+                  <Video className="w-4 h-4" />
+                  Generate video
+                </>
+              )}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -982,7 +1117,7 @@ export function Synthesize() {
           </Card>
 
           {topics.length > 0 && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="outline"
                 onClick={() => {
@@ -997,6 +1132,46 @@ export function Synthesize() {
                 Practice with Speaking Coach
               </Button>
             </div>
+          )}
+
+          {(videoLoading || videoUrl || videoError) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Video className="w-5 h-5" />
+                  Generated video
+                </CardTitle>
+                <CardDescription>
+                  AI-generated video from your synthesis (MiniMax Hailuo). Generation can take a few minutes.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {videoLoading && (
+                  <div className="flex flex-col items-center justify-center gap-3 py-8 text-muted-foreground">
+                    <Loader2 className="w-10 h-10 animate-spin" />
+                    <p className="text-sm">Creating your video… This may take 2–5 minutes.</p>
+                  </div>
+                )}
+                {videoError && !videoLoading && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-800 dark:text-red-200">
+                    {videoError}
+                  </div>
+                )}
+                {videoUrl && !videoLoading && (
+                  <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-black">
+                    <video
+                      src={videoUrl}
+                      controls
+                      className="w-full aspect-video"
+                      playsInline
+                      preload="metadata"
+                    >
+                      Your browser does not support the video tag.
+                    </video>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           )}
 
           {synthesis.knowledgeGraph && (
