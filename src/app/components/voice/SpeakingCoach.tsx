@@ -45,6 +45,7 @@ export function SpeakingCoach({
   const recognitionRef = useRef<{ start(): void; stop(): void } | null>(null);
   const userTranscriptRef = useRef("");
   const conversationTurnsRef = useRef<{ role: "user" | "coach"; text: string }[]>([]);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     userTranscriptRef.current = userTranscript;
@@ -334,42 +335,110 @@ export function SpeakingCoach({
     if (conversationActive && conversation.status === "connected") {
       return conversation.isSpeaking ? "Coach is speaking" : "Coach is listening";
     }
-    return "Disconnected";
+    return "Ready to start practice";
   };
 
+  // Canvas-based orange voice wavering UI
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    let frameId: number;
+
+    const render = (time: number) => {
+      const { width, height } = canvas;
+
+      ctx.clearRect(0, 0, width, height);
+
+      const cx = width / 2;
+      const cy = height / 2;
+      // Base radius for layout
+      const radius = Math.min(width, height) * 0.22;
+      // Circle breathing: smoothly smaller and bigger over time
+      const circleScale = 0.92 + 0.12 * Math.sin(time / 520);
+      const circleRadius = radius * circleScale;
+
+      // Core orange circle
+      const gradient = ctx.createRadialGradient(
+        cx,
+        cy,
+        circleRadius * 0.3,
+        cx,
+        cy,
+        circleRadius * 1.2,
+      );
+      gradient.addColorStop(0, "#ffe2b3");
+      gradient.addColorStop(0.5, "#ffb347");
+      gradient.addColorStop(1, "rgba(255,140,66,0.1)");
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(cx, cy, circleRadius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Rays – single unified wavering effect (more space around circle, room to extend)
+      const rayCount = 24;
+      const baseInner = radius * 1.25; // start a bit further from the circle
+      const baseOuter = radius * 1.9; // more room for extension
+      const amp = 1.0;
+
+      for (let i = 0; i < rayCount; i++) {
+        const angle = (Math.PI * 2 * i) / rayCount;
+        const phase = time / 260 + i * 0.5;
+        const extra = (Math.sin(phase) * 0.5 + 0.5) * (radius * 0.45) * amp;
+
+        const inner = baseInner;
+        const outer = baseOuter + extra;
+
+        const x1 = cx + inner * Math.cos(angle);
+        const y1 = cy + inner * Math.sin(angle);
+        const x2 = cx + outer * Math.cos(angle);
+        const y2 = cy + outer * Math.sin(angle);
+
+        ctx.strokeStyle = "rgba(255,179,71,0.95)";
+        ctx.lineWidth = radius * 0.16;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
+
+      frameId = window.requestAnimationFrame(render);
+    };
+
+    frameId = window.requestAnimationFrame(render);
+
+    return () => {
+      if (frameId) {
+        window.cancelAnimationFrame(frameId);
+      }
+    };
+  }, [conversationActive, conversation.isSpeaking, isStopping]);
+
   return (
-    <div className="flex justify-center items-center gap-x-4">
-      <Card className="rounded-3xl">
-        <CardContent>
-          <CardHeader>
-            <CardTitle className="text-center text-base">
-              {getConnectionStatus()}
-            </CardTitle>
-          </CardHeader>
+    <div className="flex items-center justify-center gap-x-4 px-3 sm:px-0">
+      <Card className="w-full max-w-2xl rounded-3xl border border-border/70 bg-card/95 shadow-lg shadow-slate-900/10">
+        <CardHeader className="pb-3 pt-6">
+          <CardTitle className="text-center text-base font-semibold tracking-tight">
+            {getConnectionStatus()}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pb-6 pt-0">
           <div className="flex flex-col gap-y-4 text-center">
-            <div
-              className={cn(
-                "my-10 mx-auto h-40 w-40 rounded-2xl overflow-hidden transition-opacity",
-                !conversationActive || isStopping ? "opacity-70" : "",
-              )}
-            >
-              <ChatbotGLB
-                url="/bot/Bear.glb"
-                scale={1.8}
-                className={cn(
-                  "w-full h-full",
-                  conversationActive && conversation.isSpeaking && !isStopping
-                    ? "animate-pulse"
-                    : conversationActive && !isStopping
-                    ? "animate-[pulse_3s_ease-in-out_infinite]"
-                    : "",
-                )}
-                compact={false}
+            <div className="mx-auto mt-4 mb-4 flex h-32 w-32 items-center justify-center sm:mt-8 sm:mb-6 sm:h-40 sm:w-40">
+              <canvas
+                ref={canvasRef}
+                width={200}
+                height={200}
+                className="h-full w-full"
               />
             </div>
 
             {error && (
-              <div className="mb-2 rounded-md bg-red-50 p-2 text-xs text-red-700">
+              <div className="mb-1 rounded-md bg-red-50 p-2 text-xs text-red-700">
                 {error}
                 <button
                   onClick={forceStop}
@@ -387,7 +456,9 @@ export function SpeakingCoach({
                     key={`u-${idx}`}
                     className="rounded-lg bg-slate-100 p-3 text-sm dark:bg-slate-800"
                   >
-                    <p className="mb-1 text-xs text-slate-500 dark:text-slate-400">You said:</p>
+                    <p className="mb-1 text-xs text-slate-500 dark:text-slate-400">
+                      You said:
+                    </p>
                     <p className="text-slate-900 dark:text-slate-100">{turn.text}</p>
                   </div>
                 ) : (
@@ -400,12 +471,14 @@ export function SpeakingCoach({
                     </p>
                     <p className="text-emerald-900 dark:text-emerald-100">{turn.text}</p>
                   </div>
-                )
+                ),
               )}
 
               {(userTranscript || userInterimTranscript) && conversationActive && micOn && (
                 <div className="rounded-lg border border-slate-300 bg-slate-50 p-3 text-sm dark:border-slate-600 dark:bg-slate-800">
-                  <p className="mb-1 text-xs text-slate-500 dark:text-slate-400">You said (live):</p>
+                  <p className="mb-1 text-xs text-slate-500 dark:text-slate-400">
+                    You said (live):
+                  </p>
                   <p className="text-slate-900 dark:text-slate-100">
                     {userTranscript}
                     {userInterimTranscript && (
@@ -419,58 +492,60 @@ export function SpeakingCoach({
               )}
             </div>
 
-            <Button
-              variant="outline"
-              className="rounded-full"
-              size="lg"
-              disabled={isStarting || conversationActive}
-              onClick={startConversation}
-            >
-              {isStarting ? "Starting…" : "Start voice practice"}
-            </Button>
-
-            <Button
-              variant={isStopping ? "destructive" : "outline"}
-              className="rounded-full"
-              size="lg"
-              onClick={stopConversation}
-              disabled={!conversationActive && !isStopping}
-            >
-              {isStopping ? "Stopping…" : "End practice"}
-            </Button>
-
-            {conversationActive && (
+            <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-center">
               <Button
-                variant={micOn ? "outline" : "secondary"}
-                className="rounded-full"
+                variant="default"
+                className="rounded-full px-6 bg-gradient-to-r from-[#ffb347] to-[#ff8c42] text-white shadow-md hover:brightness-105 disabled:opacity-60"
                 size="lg"
-                onClick={toggleMic}
-                title={micOn ? "Mute microphone" : "Unmute microphone"}
+                disabled={isStarting || conversationActive}
+                onClick={startConversation}
               >
-                {micOn ? (
-                  <>
-                    <Mic className="mr-2 h-4 w-4" />
-                    Mic on
-                  </>
-                ) : (
-                  <>
-                    <MicOff className="mr-2 h-4 w-4" />
-                    Mic off
-                  </>
-                )}
+                {isStarting ? "Starting…" : "Start voice practice"}
               </Button>
-            )}
+
+              <Button
+                variant={isStopping ? "destructive" : "outline"}
+                className="rounded-full px-6"
+                size="lg"
+                onClick={stopConversation}
+                disabled={!conversationActive && !isStopping}
+              >
+                {isStopping ? "Stopping…" : "End practice"}
+              </Button>
+
+              {conversationActive && (
+                <Button
+                  variant={micOn ? "outline" : "secondary"}
+                  className="rounded-full px-5"
+                  size="lg"
+                  onClick={toggleMic}
+                  title={micOn ? "Mute microphone" : "Unmute microphone"}
+                >
+                  {micOn ? (
+                    <>
+                      <Mic className="mr-2 h-4 w-4" />
+                      Mic on
+                    </>
+                  ) : (
+                    <>
+                      <MicOff className="mr-2 h-4 w-4" />
+                      Mic off
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
 
             {sessionSummary && (
-              <div className="rounded-lg bg-emerald-50 p-3 text-left text-sm text-emerald-800">
+              <div className="mt-1 rounded-lg bg-emerald-50 p-3 text-left text-sm text-emerald-800">
                 {sessionSummary}
               </div>
             )}
 
             <div className="mt-2 text-xs text-zinc-500">
-              Status: {conversation.status} • Active:{" "}
-              {conversationActive.toString()} • Speaking:{" "}
-              {conversation.isSpeaking.toString()}
+              Connection: {conversation.status} • Mic:{" "}
+              {micOn ? "On" : "Off"} • Coach speaking:{" "}
+              {conversation.isSpeaking ? "Yes" : "No"}
             </div>
           </div>
         </CardContent>
