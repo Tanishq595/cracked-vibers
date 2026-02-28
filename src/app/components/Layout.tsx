@@ -1,8 +1,8 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router';
 import { useState } from 'react';
 import { useClerk, useUser } from '@clerk/clerk-react';
-const LOGO_SVG = '/company_logo/logo1.png';
-const LOGO_PNG = '/company_logo/logo1.png';
+const LOGO_SVG = '/company_logo/logo.png';
+const LOGO_PNG = '/company_logo/logo.png';
 import { 
   LayoutDashboard, 
   Search, 
