@@ -25,6 +25,9 @@ import synthesisGetHandler from './api/synthesis-get'
 import oralSessionHandler from './api/oral-session'
 import ttsElevenHandler from './api/tts-eleven'
 import coachResponseHandler from './api/coach-response'
+import canvasFetchHandler from './api/canvas-fetch'
+import canvasAuthUrlHandler from './api/canvas-auth-url'
+import canvasCallbackHandler from './api/canvas-callback'
 
 function readBody(nodeReq: Connect.IncomingMessage): Promise<Record<string, unknown> | null> {
   return new Promise((resolve, reject) => {
@@ -36,8 +39,16 @@ function readBody(nodeReq: Connect.IncomingMessage): Promise<Record<string, unkn
         resolve(null)
         return
       }
+      const contentType = (nodeReq.headers['content-type'] ?? '') as string
       try {
-        resolve(JSON.parse(raw) as Record<string, unknown>)
+        if (contentType.includes('application/x-www-form-urlencoded')) {
+          const params = new URLSearchParams(raw)
+          const out: Record<string, unknown> = {}
+          params.forEach((v, k) => { out[k] = v })
+          resolve(out)
+        } else {
+          resolve(JSON.parse(raw) as Record<string, unknown>)
+        }
       } catch {
         resolve(null)
       }
@@ -68,6 +79,9 @@ const API_HANDLERS: Record<string, (req: Connect.IncomingMessage, res: Connect.S
   '/api/oral-session': runVercelHandlerWithBody(oralSessionHandler),
   '/api/tts-eleven': runVercelHandlerWithBody(ttsElevenHandler),
   '/api/coach-response': runVercelHandlerWithBody(coachResponseHandler),
+  '/api/canvas/fetch': runVercelHandlerGet(canvasFetchHandler),
+  '/api/canvas/auth-url': runVercelHandlerWithBody(canvasAuthUrlHandler),
+  '/api/canvas/callback': runVercelHandlerGetWithRedirect(canvasCallbackHandler),
 }
 
 type VercelReq = {
@@ -99,6 +113,75 @@ function runVercelHandler(handler: (req: VercelReq, res: VercelRes) => Promise<v
   }
 }
 
+function runVercelHandlerGet(handler: (req: VercelReq, res: VercelRes) => Promise<void>) {
+  return async (nodeReq: Connect.IncomingMessage, nodeRes: Connect.ServerResponse) => {
+    const url = nodeReq.url ?? ''
+    const q = url.includes('?') ? url.split('?')[1] : ''
+    const query: Record<string, string | string[]> = {}
+    if (q) {
+      for (const part of q.split('&')) {
+        const [k, v] = part.split('=')
+        if (k) query[decodeURIComponent(k)] = v ? decodeURIComponent(v) : ''
+      }
+    }
+    const req: VercelReq = {
+      method: nodeReq.method,
+      headers: nodeReq.headers as Record<string, string | string[] | undefined>,
+      query,
+    }
+    const res: VercelRes = {
+      status(code: number) {
+        nodeRes.statusCode = code
+        return {
+          json(body: object) {
+            nodeRes.setHeader('Content-Type', 'application/json')
+            nodeRes.end(JSON.stringify(body))
+          },
+        }
+      },
+    }
+    await handler(req, res)
+  }
+}
+
+function runVercelHandlerGetWithRedirect(
+  handler: (req: VercelReq, res: VercelRes & { redirect: (url: string) => void }) => Promise<void>
+) {
+  return async (nodeReq: Connect.IncomingMessage, nodeRes: Connect.ServerResponse) => {
+    const url = nodeReq.url ?? ''
+    const q = url.includes('?') ? url.split('?')[1] : ''
+    const query: Record<string, string | string[]> = {}
+    if (q) {
+      for (const part of q.split('&')) {
+        const [k, v] = part.split('=')
+        if (k) query[decodeURIComponent(k)] = v ? decodeURIComponent(v) : ''
+      }
+    }
+    const req: VercelReq = {
+      method: nodeReq.method,
+      headers: nodeReq.headers as Record<string, string | string[] | undefined>,
+      query,
+    }
+    const res: VercelRes & { redirect: (url: string) => void } = {
+      status(code: number) {
+        nodeRes.statusCode = code
+        return {
+          json(body: object) {
+            nodeRes.setHeader('Content-Type', 'application/json')
+            nodeRes.end(JSON.stringify(body))
+          },
+        }
+      },
+      redirect(redirectUrl: string) {
+        nodeRes.statusCode = 302
+        nodeRes.setHeader('Location', redirectUrl)
+        nodeRes.end()
+      },
+    }
+    await handler(req, res)
+  }
+}
+
 function runVercelHandlerWithBody(handler: (req: VercelReq, res: VercelRes) => Promise<void>) {
   return async (nodeReq: Connect.IncomingMessage, nodeRes: Connect.ServerResponse) => {
     let body: Record<string, unknown> | null = null
@@ -114,13 +197,24 @@ function runVercelHandlerWithBody(handler: (req: VercelReq, res: VercelRes) => P
         if (k) query[decodeURIComponent(k)] = v ? decodeURIComponent(v) : ''
       }
     }
+    // Preserve Authorization from rawHeaders (proxy or Node may lowercase/drop it)
+    const headers = { ...nodeReq.headers } as Record<string, string | string[] | undefined>
+    const raw = nodeReq.rawHeaders
+    if (raw && !headers.authorization && !headers.Authorization) {
+      for (let i = 0; i < raw.length - 1; i += 2) {
+        if (raw[i].toLowerCase() === 'authorization') {
+          headers.authorization = raw[i + 1]
+          break
+        }
+      }
+    }
     const req: VercelReq = {
       method: nodeReq.method,
-      headers: nodeReq.headers as Record<string, string | string[] | undefined>,
+      headers,
       body: body ?? undefined,
       query,
     }
-    const res: VercelRes = {
+    const res: VercelRes & { redirect?: (url: string) => void } = {
       status(code: number) {
         nodeRes.statusCode = code
         return {
@@ -129,6 +223,11 @@ function runVercelHandlerWithBody(handler: (req: VercelReq, res: VercelRes) => P
             nodeRes.end(JSON.stringify(body))
           },
         }
+      },
+      redirect(url: string) {
+        nodeRes.statusCode = 302
+        nodeRes.setHeader('Location', url)
+        nodeRes.end()
       },
     }
     await handler(req, res)
@@ -166,12 +265,21 @@ export default defineConfig({
 
   server: {
     port: 3000,
-    proxy: {
-      '/api': {
-        target: process.env.VITE_API_URL || 'http://localhost:3000',
-        changeOrigin: true,
-      },
-    },
+    // Only proxy /api when VITE_API_URL is set (e.g. separate backend). Otherwise api-dev handles /api and keeps headers.
+    proxy: process.env.VITE_API_URL
+      ? {
+          '/api': {
+            target: process.env.VITE_API_URL,
+            changeOrigin: true,
+            configure(proxy) {
+              proxy.on('proxyReq', (proxyReq, req: Connect.IncomingMessage) => {
+                const h = req.headers?.authorization ?? req.headers?.Authorization
+                if (h) proxyReq.setHeader('Authorization', typeof h === 'string' ? h : h[0] ?? '')
+              })
+            },
+          },
+        }
+      : undefined,
   },
 
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
