@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "dev": "vite"
+    "dev": "vite",
+    "deploy:cloudflare": "npm run build && npx wrangler pages deploy dist --project-name=cracked-vibers"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.893.0",
